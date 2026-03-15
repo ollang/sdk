@@ -3,7 +3,7 @@
 /**
  * Translation Management System CLI
  *
- * Usage: npx @ollang/sdk tms
+ * Usage: npx @ollang-dev/sdk start
  */
 
 const { spawn } = require('child_process');

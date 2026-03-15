@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "ollang-tms": "./bin/tms.js"
+    "ollang-start": "./bin/start.js"
   },
   "exports": {
     ".": {

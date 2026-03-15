@@ -25,6 +25,7 @@
   ],
   "scripts": {
     "build": "npm run build:node && npm run build:ui && npm run build:browser",
+    "build:ci": "npm run build:node && npm run build:ui:copy",
     "build:node": "tsc",
     "build:ui": "npm run build:ui:react && npm run build:ui:copy",
     "build:ui:react": "cd src/tms/ui-react && npm install && npm run build && cd ../../..",

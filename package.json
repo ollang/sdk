@@ -1,0 +1,98 @@
+{
+  "name": "@ollang-dev/sdk",
+  "version": "0.3.1",
+  "description": "Official TypeScript/Node.js SDK for Ollang API - Translation, Transcription, Dubbing, Closed Captioning, and Translation Management System",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "ollang-tms": "./bin/tms.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./browser": {
+      "types": "./dist/browser/index.d.ts",
+      "default": "./dist/browser/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "npm run build:node && npm run build:ui && npm run build:browser",
+    "build:node": "tsc",
+    "build:ui": "npm run build:ui:react && npm run build:ui:copy",
+    "build:ui:react": "cd src/tms/ui-react && npm install && npm run build && cd ../../..",
+    "build:ui:copy": "mkdir -p dist/tms && cp -r src/tms/ui-dist dist/tms/",
+    "build:browser": "webpack --config webpack.browser.config.js",
+    "build:browser:watch": "webpack --config webpack.browser.config.js --watch",
+    "copy:browser": "cp dist/browser/ollang-browser.min.js ../ollang-home/src/assets/",
+    "dev": "tsc --watch",
+    "dev:ui": "cd src/tms/ui-react && npm run dev",
+    "dev:browser": "npm run build:browser:watch & npm run watch:copy",
+    "watch:copy": "nodemon --watch dist/browser/ollang-browser.min.js --exec 'npm run copy:browser'",
+    "prepublishOnly": "npm run build",
+    "test": "jest",
+    "test:tms:local": "npm run build:node && node dist/examples/test-tms-local.js",
+    "test:browser": "open examples/browser-cms-integration.html",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "keywords": [
+    "ollang",
+    "translation",
+    "transcription",
+    "dubbing",
+    "closed-captioning",
+    "subtitles",
+    "localization",
+    "sdk",
+    "api",
+    "typescript"
+  ],
+  "author": "Ollang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ollang/sdk.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ollang/sdk/issues"
+  },
+  "homepage": "https://github.com/ollang/sdk#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "express": "^4.18.2",
+    "form-data": "^4.0.0",
+    "open": "^8.4.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.3.28",
+    "@typescript-eslint/eslint-plugin": "^6.15.0",
+    "@typescript-eslint/parser": "^6.15.0",
+    "eslint": "^8.55.0",
+    "prettier": "^3.1.0",
+    "ts-loader": "^9.5.0",
+    "typescript": "^5.3.0",
+    "webpack": "^5.89.0",
+    "webpack-cli": "^5.1.4"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  }
+}

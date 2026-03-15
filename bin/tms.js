@@ -1,0 +1,47 @@
+#!/usr/bin/env node
+
+/**
+ * Translation Management System CLI
+ *
+ * Usage: npx @ollang/sdk tms
+ */
+
+const { spawn } = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+console.log('🚀 Translation Management System başlatılıyor...\n');
+
+const serverPath = path.join(__dirname, '..', 'dist', 'tms', 'server', 'index.js');
+
+if (!fs.existsSync(serverPath)) {
+  console.error('❌  npm run build');
+  process.exit(1);
+}
+
+const server = spawn('node', [serverPath], {
+  stdio: 'inherit',
+  cwd: process.cwd(),
+  env: {
+    ...process.env,
+    TMS_PROJECT_ROOT: process.cwd(),
+  },
+});
+
+process.on('SIGINT', () => {
+  console.log('\n\n👋 TMS kapatılıyor...');
+  server.kill('SIGINT');
+  process.exit(0);
+});
+
+server.on('error', (error) => {
+  console.error('❌ Server başlatılamadı:', error.message);
+  process.exit(1);
+});
+
+server.on('exit', (code) => {
+  if (code !== 0 && code !== null) {
+    console.error(`❌ Server hata ile kapandı (kod: ${code})`);
+    process.exit(code);
+  }
+});

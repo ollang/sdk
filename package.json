@@ -37,7 +37,7 @@
     "dev:ui": "cd src/tms/ui-react && npm run dev",
     "dev:browser": "npm run build:browser:watch & npm run watch:copy",
     "watch:copy": "nodemon --watch dist/browser/ollang-browser.min.js --exec 'npm run copy:browser'",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run build:ci",
     "test": "jest",
     "test:tms:local": "npm run build:node && node dist/examples/test-tms-local.js",
     "test:browser": "open examples/browser-cms-integration.html",

@@ -5,6 +5,7 @@ import { TextItem } from '../types.js';
 import { autoDetectI18nDirs } from '../detector/auto-detect.js';
 import { StrapiPusher, StrapiPushResult, StrapiTranslationItem } from './strapi-pusher.js';
 import { loadStrapiSchema, StrapiSchemaConfig } from './strapi-schema.js';
+import { logger } from '../../logger.js';
 
 const app = express();
 
@@ -117,14 +118,14 @@ async function updateCurrentScan(folderName?: string) {
   const { currentScanId, texts, videos, images, audios } = state;
 
   if (!tms) {
-    console.warn('⚠️  Cannot update scan: Ollang not initialized');
+    logger.warn('Cannot update scan: Ollang not initialized');
     return;
   }
 
   try {
     const sdk = tms.getSDK();
     if (!sdk) {
-      console.warn('⚠️  SDK not available');
+      logger.warn('SDK not available');
       return;
     }
 
@@ -135,7 +136,7 @@ async function updateCurrentScan(folderName?: string) {
       if (previousScans.length > 0) {
         state.currentScanId = previousScans[0].id;
       } else {
-        console.warn('⚠️  No existing scan found, cannot update');
+        logger.warn('No existing scan found, cannot update');
         return;
       }
     }
@@ -148,10 +149,7 @@ async function updateCurrentScan(folderName?: string) {
           ? JSON.parse(existingScan.scanData)
           : existingScan.scanData || {};
     } catch (error: any) {
-      console.warn(
-        '⚠️  Could not load existing scan data while updating scan:',
-        error?.message || error
-      );
+      logger.warn('Could not load existing scan data while updating scan');
       existingScanData = {};
     }
 
@@ -171,8 +169,7 @@ async function updateCurrentScan(folderName?: string) {
       },
     });
   } catch (error: any) {
-    console.error('❌ Failed to update scan:', error.message);
-    console.error('❌ Error stack:', error.stack);
+    logger.error('Failed to update scan', error);
   }
 }
 
@@ -223,7 +220,7 @@ async function initTMS() {
       }
     }
   } catch (e) {
-    console.warn('⚠️  Failed to read ollang.config.ts, falling back to env/defaults');
+    logger.warn('Failed to read ollang.config.ts, falling back to env/defaults');
   }
 
   const sourceLanguage = fileConfig.sourceLanguage || process.env.TMS_SOURCE_LANGUAGE || 'en';
@@ -266,7 +263,7 @@ async function initTMS() {
   });
 
   if (!apiKey) {
-    console.warn('⚠️  OLLANG_API_KEY not set. Translation features will not work.');
+    logger.warn('OLLANG_API_KEY not set. Translation features will not work.');
   }
 
   return tms;
@@ -323,7 +320,7 @@ app.get('/api/projects', async (req, res) => {
       total: data.meta?.itemCount || 0,
     });
   } catch (error: any) {
-    console.error('❌ Failed to load projects:', error.message);
+    logger.error('Failed to load projects', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -359,7 +356,7 @@ app.post('/api/config/apikey', async (req, res) => {
         throw new Error('Base URL is not configured');
       }
 
-      console.warn('🔍 Validating API key with base URL:', baseUrl);
+      logger.debug('Validating API key with base URL:', baseUrl);
 
       const response = await fetch(`${baseUrl}/scans/folders`, {
         method: 'GET',
@@ -380,14 +377,14 @@ app.post('/api/config/apikey', async (req, res) => {
         throw new Error('Invalid response from server while validating API key');
       }
 
-      console.log(`✅ API key validated successfully. Accessible folders: ${folders.length}`);
+      logger.debug(`API key validated successfully. Accessible folders: ${folders.length}`);
 
       res.json({
         success: true,
         message: 'API key validated and updated successfully',
       });
     } catch (validationError: any) {
-      console.error('❌ Test API key validation failed:', validationError.message);
+      logger.error('Test API key validation failed', validationError);
 
       process.env.OLLANG_API_KEY = previousApiKey;
       tms = await initTMS();
@@ -398,7 +395,7 @@ app.post('/api/config/apikey', async (req, res) => {
       });
     }
   } catch (error: any) {
-    console.error('❌ Failed to update API key:', error.message);
+    logger.error('Failed to update API key', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -465,7 +462,7 @@ app.post('/api/config/update', async (req, res) => {
       configPath,
     });
   } catch (error: any) {
-    console.error('❌ Failed to update config:', error.message);
+    logger.error('Failed to update config', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -596,7 +593,7 @@ app.post('/api/scan', async (req, res) => {
             latestScanData = typeof data === 'string' ? JSON.parse(data) : data;
           }
         } catch (e: any) {
-          console.error('⚠️  Could not load previous scans via listScans:', e?.message || e);
+          logger.error('Could not load previous scans via listScans', e);
         }
 
         if (latestScanData && latestScanData.texts && folderState.currentScanId) {
@@ -674,7 +671,7 @@ app.post('/api/scan', async (req, res) => {
         }
       }
     } catch (saveError: any) {
-      console.error('⚠️  Failed to save scan results:', saveError.message);
+      logger.error('Failed to save scan results', saveError);
     }
 
     const scanTime = new Date().toISOString();
@@ -693,7 +690,7 @@ app.post('/api/scan', async (req, res) => {
       },
     });
   } catch (error: any) {
-    console.error('❌ Scan error:', error.message);
+    logger.error('Scan error', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -739,7 +736,7 @@ app.post('/api/translate', async (req, res) => {
     const sdk = tms.getSDK();
     if (sdk && folderName) {
       try {
-        console.log(`📂 Loading latest scan for folder: ${folderName}`);
+        logger.debug(`Loading latest scan for folder: ${folderName}`);
 
         // Get folderId from Ollang server's /api/folders endpoint
         try {
@@ -749,10 +746,10 @@ app.post('/api/translate', async (req, res) => {
           const targetFolder = folders.find((f: any) => f.name === folderName);
           if (targetFolder && targetFolder.id) {
             folderId = targetFolder.id;
-            console.log(`📁 Found folderId: ${folderId} for folder: ${folderName}`);
+            logger.debug(`Found folderId: ${folderId} for folder: ${folderName}`);
           }
         } catch (folderError: any) {
-          console.warn('⚠️  Could not get folders:', folderError.message);
+          logger.warn('Could not get folders');
         }
 
         const scans = await sdk.scans.listScans();
@@ -774,11 +771,11 @@ app.post('/api/translate', async (req, res) => {
 
           if (scanData.texts) {
             folderState.texts = scanData.texts;
-            console.log(`✅ Loaded ${folderState.texts.length} items from folder ${folderName}`);
+            logger.debug(`Loaded ${folderState.texts.length} items from folder ${folderName}`);
           }
         }
       } catch (error: any) {
-        console.warn('⚠️  Could not load folder scan:', error.message);
+        logger.warn('Could not load folder scan');
       }
     } else if (sdk && folderState.currentScanId) {
       // Fallback: reload from currentScanId
@@ -788,12 +785,12 @@ app.post('/api/translate', async (req, res) => {
           typeof scan.scanData === 'string' ? JSON.parse(scan.scanData) : scan.scanData;
         if (scanData.texts) {
           folderState.texts = scanData.texts;
-          console.log(
-            `✅ Reloaded ${folderState.texts.length} items from scan ${folderState.currentScanId}`
+          logger.debug(
+            `Reloaded ${folderState.texts.length} items from scan ${folderState.currentScanId}`
           );
         }
       } catch (error) {
-        console.warn('⚠️  Could not reload scan data, using cached currentTexts');
+        logger.warn('Could not reload scan data, using cached currentTexts');
       }
     }
 
@@ -802,9 +799,9 @@ app.post('/api/translate', async (req, res) => {
     const selectedItems = folderState.texts.filter((t) => textIds.includes(t.id));
 
     if (selectedItems.length === 0) {
-      console.error(`❌ No items found. Requested IDs: ${textIds.slice(0, 3).join(', ')}...`);
-      console.error(
-        `❌ Available IDs: ${folderState.texts
+      logger.debug(`No items found. Requested IDs: ${textIds.slice(0, 3).join(', ')}...`);
+      logger.debug(
+        `Available IDs: ${folderState.texts
           .slice(0, 3)
           .map((t: TextItem) => t.id)
           .join(', ')}...`
@@ -823,17 +820,13 @@ app.post('/api/translate', async (req, res) => {
     const imageItems = selectedItems.filter((item) => item.category === 'image');
     const audioItems = selectedItems.filter((item) => item.category === 'audio');
 
-    console.log(`📊 Translation breakdown:`);
-    console.log(`   - i18n texts: ${i18nItems.length}`);
-    console.log(`   - Videos: ${videoItems.length}`);
-    console.log(`   - Images: ${imageItems.length}`);
-    console.log(`   - Audios: ${audioItems.length}`);
+    logger.debug(`Translation breakdown: i18n=${i18nItems.length}, videos=${videoItems.length}, images=${imageItems.length}, audios=${audioItems.length}`);
 
     // Log cmsFields info for entry-based items
     for (const item of i18nItems) {
       if (item.cmsFields) {
-        console.log(
-          `   📦 Entry ${item.id}: ${Object.keys(item.cmsFields).length} fields [${Object.keys(item.cmsFields).join(', ')}]`
+        logger.debug(
+          `Entry ${item.id}: ${Object.keys(item.cmsFields).length} fields [${Object.keys(item.cmsFields).join(', ')}]`
         );
       }
     }
@@ -859,7 +852,7 @@ app.post('/api/translate', async (req, res) => {
     try {
       await updateCurrentScan(folderName);
     } catch (saveError: any) {
-      console.error('⚠️  Failed to save translating status:', saveError.message);
+      logger.error('Failed to save translating status', saveError);
     }
 
     // Return immediately with translating status
@@ -882,7 +875,7 @@ app.post('/api/translate', async (req, res) => {
 
         if (i18nItems.length > 0) {
           for (const lang of languages) {
-            console.log(`🌍 Translating ${i18nItems.length} i18n texts to ${lang}...`);
+            logger.debug(`Translating ${i18nItems.length} i18n texts to ${lang}...`);
             try {
               const order = await tms.translate(i18nItems, lang, level || 0, folderName, folderId);
 
@@ -945,19 +938,19 @@ app.post('/api/translate', async (req, res) => {
                 }
               });
             } catch (error: any) {
-              console.error(`❌ i18n translation error for lang ${lang}:`, error.message);
+              logger.error(`i18n translation error for lang ${lang}`, error);
             }
           }
         }
 
         if (videoItems.length > 0) {
-          console.log(`🎬 Translating ${videoItems.length} videos to ${primaryLang}...`);
+          logger.debug(`Translating ${videoItems.length} videos to ${primaryLang}...`);
           for (const item of videoItems) {
             try {
               const videoData = (item as any)._videoData;
               if (videoData) {
                 const orderId = await tms.translateVideo(videoData, primaryLang, level || 0);
-                console.log(`✅ Video translation order created: ${orderId}`);
+                logger.debug(`Video translation order created: ${orderId}`);
 
                 const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
                 if (textIndex !== -1) {
@@ -969,7 +962,7 @@ app.post('/api/translate', async (req, res) => {
                 }
               }
             } catch (error: any) {
-              console.error(`❌ Video translation error for ${item.id}:`, error.message);
+              logger.error(`Video translation error for ${item.id}`, error);
               const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
               if (textIndex !== -1) {
                 folderState.texts[textIndex] = {
@@ -982,14 +975,14 @@ app.post('/api/translate', async (req, res) => {
         }
 
         if (imageItems.length > 0) {
-          console.log(`🖼️  Translating ${imageItems.length} images to ${primaryLang}...`);
+          logger.debug(`Translating ${imageItems.length} images to ${primaryLang}...`);
           for (const item of imageItems) {
             try {
               const imageData = (item as any)._imageData;
               if (imageData) {
                 imageData.textItemId = item.id;
                 const orderId = await tms.translateImage(imageData, primaryLang, level || 0);
-                console.log(`✅ Image translation order created: ${orderId}`);
+                logger.debug(`Image translation order created: ${orderId}`);
 
                 const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
                 if (textIndex !== -1) {
@@ -1001,7 +994,7 @@ app.post('/api/translate', async (req, res) => {
                 }
               }
             } catch (error: any) {
-              console.error(`❌ Image translation error for ${item.id}:`, error.message);
+              logger.error(`Image translation error for ${item.id}`, error);
               const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
               if (textIndex !== -1) {
                 folderState.texts[textIndex] = {
@@ -1014,7 +1007,7 @@ app.post('/api/translate', async (req, res) => {
         }
 
         if (audioItems.length > 0) {
-          console.log(`🎵 Translating ${audioItems.length} audios to ${primaryLang}...`);
+          logger.debug(`Translating ${audioItems.length} audios to ${primaryLang}...`);
           for (const item of audioItems) {
             try {
               const audioData = (item as any)._audioData;
@@ -1031,7 +1024,7 @@ app.post('/api/translate', async (req, res) => {
                 }
               }
             } catch (error: any) {
-              console.error(`❌ Audio translation error for ${item.id}:`, error.message);
+              logger.error(`Audio translation error for ${item.id}`, error);
               const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
               if (textIndex !== -1) {
                 folderState.texts[textIndex] = {
@@ -1045,16 +1038,16 @@ app.post('/api/translate', async (req, res) => {
 
         try {
           await updateCurrentScan(folderName);
-          console.log('✅ All translations completed and saved');
+          logger.debug('All translations completed and saved');
         } catch (saveError: any) {
-          console.warn('⚠️  Failed to save translation statuses:', saveError.message);
+          logger.warn('Failed to save translation statuses');
         }
       } catch (error: any) {
-        console.error('❌ Translation error:', error.message);
+        logger.error('Translation error', error);
       }
     })();
   } catch (error: any) {
-    console.error('❌ Translation error:', error.message);
+    logger.error('Translation error', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -1114,7 +1107,7 @@ app.post('/api/apply', async (req, res) => {
           }
         }
       } catch (error: any) {
-        console.error('⚠️  Could not load folder scan:', error.message);
+        logger.error('Could not load folder scan', error);
       }
     }
 
@@ -1183,10 +1176,10 @@ app.post('/api/apply', async (req, res) => {
     } = { pushed: 0, failed: 0 };
 
     if (fileItems.length > 0) {
-      console.log(`📝 Applying ${fileItems.length} file-based translations...`);
+      logger.debug(`Applying ${fileItems.length} file-based translations...`);
       (tms as any)['state'].texts = folderState.texts;
       updatedFiles = await tms.applyTranslations(targetLanguage, fileItems);
-      console.log(`✅ Updated ${updatedFiles} files`);
+      logger.debug(`Updated ${updatedFiles} files`);
     }
 
     if (cmsEntryItems.length > 0) {
@@ -1195,12 +1188,9 @@ app.post('/api/apply', async (req, res) => {
         effectiveStrapiToken || process.env.STRAPI_TOKEN || process.env.STRAPI_API_TOKEN || '';
 
       if (!strapiUrl || !strapiToken) {
-        console.warn(
-          '⚠️  STRAPI_URL and STRAPI_TOKEN env vars required for CMS push. Skipping Strapi push.'
-        );
-        console.warn('   Set: STRAPI_URL=https://cms.ollang.com STRAPI_TOKEN=your-token');
+        logger.warn('STRAPI_URL and STRAPI_TOKEN env vars required for CMS push. Skipping Strapi push.');
       } else {
-        console.log(`🌐 Pushing ${cmsEntryItems.length} CMS entries to Strapi (${strapiUrl})...`);
+        logger.debug(`Pushing ${cmsEntryItems.length} CMS entries to Strapi (${strapiUrl})...`);
 
         const pusher = new StrapiPusher({ strapiUrl, strapiToken });
 
@@ -1247,10 +1237,7 @@ app.post('/api/apply', async (req, res) => {
           };
 
           if (result.errors.length > 0) {
-            console.error(
-              '   Strapi push errors (per field):',
-              JSON.stringify(result.errors, null, 2)
-            );
+            logger.error('Strapi push errors encountered');
           }
         }
       }
@@ -1285,7 +1272,7 @@ app.post('/api/apply', async (req, res) => {
     try {
       await updateCurrentScan(folderName);
     } catch (saveError: any) {
-      console.error('⚠️  Failed to save apply statuses:', saveError.message);
+      logger.error('Failed to save apply statuses', saveError);
     }
 
     const appliedCount = appliedTextIds.length;
@@ -1299,7 +1286,7 @@ app.post('/api/apply', async (req, res) => {
       message: `Applied ${appliedCount} translations: ${updatedFiles} files updated, ${strapiResults.pushed} CMS items pushed to Strapi`,
     });
   } catch (error: any) {
-    console.error('❌ Apply error:', error.message);
+    logger.error('Apply error', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -1329,7 +1316,7 @@ function getOllangBackendBase(): string {
     backendBase = tms.getConfig().ollang.baseUrl || '';
   }
   if (!backendBase) {
-    backendBase = 'http://localhost:8080';
+    backendBase = 'https://api-integration.ollang.com';
   }
   backendBase = backendBase.replace(/\/$/, '');
 
@@ -1340,14 +1327,12 @@ function getOllangBackendBase(): string {
     extraHosts.forEach((h) => allowedHosts.add(h.trim()));
 
     if (!allowedHosts.has(parsed.hostname)) {
-      console.warn(
-        `\u26a0\ufe0f Backend URL hostname "${parsed.hostname}" not in allowlist, using default`
-      );
-      return 'http://localhost:8080';
+      logger.warn(`Backend URL hostname "${parsed.hostname}" not in allowlist, using default`);
+      return 'https://api-integration.ollang.com';
     }
   } catch {
-    console.warn('\u26a0\ufe0f Invalid backend URL format, using default');
-    return 'http://localhost:8080';
+    logger.warn('Invalid backend URL format, using default');
+    return 'https://api-integration.ollang.com';
   }
 
   return backendBase;
@@ -1367,7 +1352,7 @@ app.get('/scans/folders', async (req, res) => {
     const data = await response.json().catch(() => ({}));
     res.status(response.status).json(data);
   } catch (error: any) {
-    console.error('❌ /scans/folders proxy error:', error?.message);
+    logger.error('/scans/folders proxy error', error);
     res.status(500).json({
       success: false,
       error: error?.message || 'Failed to reach Ollang API',
@@ -1391,7 +1376,7 @@ app.get('/scans', async (req, res) => {
     const data = await response.json().catch(() => ({}));
     res.status(response.status).json(data);
   } catch (error: any) {
-    console.error('❌ GET /scans proxy error:', error?.message);
+    logger.error('GET /scans proxy error', error);
     res.status(500).json({
       success: false,
       error: error?.message || 'Failed to reach Ollang API',
@@ -1414,7 +1399,7 @@ app.post('/scans', async (req, res) => {
     const data = await response.json().catch(() => ({}));
     res.status(response.status).json(data);
   } catch (error: any) {
-    console.error('❌ POST /scans proxy error:', error?.message);
+    logger.error('POST /scans proxy error', error);
     res.status(500).json({
       success: false,
       error: error?.message || 'Failed to reach Ollang API',
@@ -1444,7 +1429,7 @@ app.patch('/scans/:id', async (req, res) => {
     const data = await response.json().catch(() => ({}));
     res.status(response.status).json(data);
   } catch (error: any) {
-    console.error('❌ PATCH /scans/:id proxy error:', error?.message);
+    logger.error('PATCH /scans/:id proxy error', error);
     res.status(500).json({
       success: false,
       error: error?.message || 'Failed to reach Ollang API',
@@ -1491,8 +1476,7 @@ app.get('/api/folders', async (req, res) => {
       folders: normalizedFolders,
     });
   } catch (error: any) {
-    console.error('❌ Failed to load folders:', error.message);
-    console.error('❌ Error details:', error.response?.data);
+    logger.error('Failed to load folders', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -1523,7 +1507,7 @@ app.get('/api/scans', async (req, res) => {
         }
       });
     } catch (error) {
-      console.warn('⚠️  Could not load folders for mapping');
+      logger.warn('Could not load folders for mapping');
     }
 
     const scansWithFolderName = scans.map((scan) => {
@@ -1562,7 +1546,7 @@ app.get('/api/scans', async (req, res) => {
       scans: filteredScans,
     });
   } catch (error: any) {
-    console.error('❌ Failed to load scans:', error.message);
+    logger.error('Failed to load scans', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -1608,7 +1592,7 @@ app.get('/api/scans/:scanId', async (req, res) => {
       texts: folderState.texts,
     });
   } catch (error: any) {
-    console.error('❌ Failed to load scan:', error.message);
+    logger.error('Failed to load scan', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -1666,7 +1650,7 @@ app.post('/api/strapi-schema', async (req, res) => {
       fieldsByContentType: config.fieldsByContentType,
     });
   } catch (error: any) {
-    console.error('Strapi schema fetch failed:', error?.message || error);
+    logger.error('Strapi schema fetch failed', error);
     return res.status(500).json({
       success: false,
       error: error?.message || 'Failed to fetch Strapi schema',
@@ -1703,12 +1687,12 @@ app.get('*', (_req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log('🚀 Translation Management System starting...');
-  console.log(`📦 Project: ${PROJECT_ROOT}`);
-  console.log(`🌐 Control panel: http://localhost:${PORT}`);
-  console.log(`💡 Opening in your browser...`);
-  console.log(`   If not opened: http://localhost:${PORT}`);
-  console.log(`⌨️  To stop: Ctrl+C\n`);
+  logger.info('🚀 Translation Management System starting...');
+  logger.info(`📦 Project: ${PROJECT_ROOT}`);
+  logger.info(`🌐 Control panel: http://localhost:${PORT}`);
+  logger.info(`💡 Opening in your browser...`);
+  logger.info(`   If not opened: http://localhost:${PORT}`);
+  logger.info(`⌨️  To stop: Ctrl+C\n`);
 
   const open = require('open');
   open(`http://localhost:${PORT}`).catch(() => {});

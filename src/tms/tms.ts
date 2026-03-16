@@ -15,6 +15,7 @@ import {
   ScanConfig,
 } from './types.js';
 import { VideoContent, ImageContent, AudioContent } from './detector/content-type-detector.js';
+import { logger } from '../logger.js';
 
 export class TranslationManagementSystem {
   private config: TMSConfig;
@@ -136,7 +137,7 @@ export class TranslationManagementSystem {
           }
         }
       } catch (error) {
-        console.error(`   ❌ Error checking translation for ${text.id}:`, error);
+        logger.error(`Error checking translation for ${text.id}`, error);
       }
 
       if (hasExistingTranslation) {
@@ -247,7 +248,7 @@ export class TranslationManagementSystem {
           }
         }
       } catch (error) {
-        console.error(`   ❌ Error syncing ${text.id}:`, error);
+        logger.error(`Error syncing ${text.id}`, error);
       }
     }
   }
@@ -284,12 +285,7 @@ export class TranslationManagementSystem {
 
       return order;
     } catch (error) {
-      console.error('❌ Translation Error Details:');
-      console.error('   Error:', error);
-      if (error instanceof Error) {
-        console.error('   Message:', error.message);
-        console.error('   Stack:', error.stack);
-      }
+      logger.error('Translation failed', error);
       this.state.lastError = error as Error;
       throw error;
     } finally {
@@ -380,10 +376,10 @@ export class TranslationManagementSystem {
     formData.append('sourceLanguage', params.sourceLanguage);
 
     if (params.folderId) {
-      console.log(`📁 Using provided folderId: ${params.folderId}`);
+      logger.debug(`Using provided folderId: ${params.folderId}`);
       formData.append('folderId', params.folderId);
     } else if (params.folderName) {
-      console.log(`📁 Getting folderId for folder: ${params.folderName}`);
+      logger.debug(`Getting folderId for folder: ${params.folderName}`);
       try {
         const axios = require('axios');
         const response = await axios.get('http://localhost:5972/api/folders');
@@ -391,34 +387,34 @@ export class TranslationManagementSystem {
         const targetFolder = folders.find((f: any) => f.name === params.folderName);
 
         if (targetFolder && targetFolder.id) {
-          console.log(`📁 Found folderId: ${targetFolder.id}`);
+          logger.debug(`Found folderId: ${targetFolder.id}`);
           formData.append('folderId', targetFolder.id);
         } else {
-          console.warn(`⚠️  Folder "${params.folderName}" not found in folders list`);
+          logger.warn(`Folder "${params.folderName}" not found in folders list`);
         }
       } catch (error) {
-        console.warn('⚠️  Could not get folder list:', error);
+        logger.error('Could not get folder list', error);
       }
     } else if (params.projectId) {
-      console.log(`📌 Getting folder from project: ${params.projectId}`);
+      logger.debug(`Getting folder from project: ${params.projectId}`);
       try {
         const project = await this.ollangClient.projects.get(params.projectId);
         if (project.folderId) {
-          console.log(`📁 Found folderId: ${project.folderId}`);
+          logger.debug(`Found folderId: ${project.folderId}`);
           formData.append('folderId', project.folderId);
         }
       } catch (error) {
-        console.warn('⚠️  Could not get project folder:', error);
+        logger.error('Could not get project folder', error);
       }
     }
 
-    console.log('📤 Uploading document...');
+    logger.debug('Uploading document...');
     const uploadResponse = await this.ollangClient
       .getClient()
       .uploadFile<{ projectId: string }>('/integration/upload/direct', formData);
 
     const projectId = uploadResponse.projectId;
-    console.log(`✅ Document uploaded, project: ${projectId}`);
+    logger.debug(`Document uploaded, project: ${projectId}`);
 
     const orderParams = {
       orderType: 'document' as const,
@@ -432,8 +428,7 @@ export class TranslationManagementSystem {
       ],
     };
 
-    console.log('📤 Creating order with params:');
-    console.log(JSON.stringify(orderParams, null, 2));
+    logger.debug('Creating order with params:', orderParams);
 
     const orderResponse = await this.ollangClient.orders.create(orderParams);
 
@@ -490,13 +485,13 @@ export class TranslationManagementSystem {
       }
 
       if (documents.length > 0) {
-        console.log(`Found ${documents.length} documents`);
+        logger.debug(`Found ${documents.length} documents`);
 
         for (const doc of documents) {
           const documentUrl = doc.targetDocumentUrl || doc.url || doc.documentUrl;
 
           if (documentUrl) {
-            console.log(`📥 Downloading translated document: ${documentUrl}`);
+            logger.debug(`Downloading translated document: ${documentUrl}`);
 
             const axios = require('axios');
             const response = await axios.get(documentUrl, {
@@ -504,7 +499,7 @@ export class TranslationManagementSystem {
             });
 
             const translatedData = response.data;
-            console.log('📄 Translated document:', JSON.stringify(translatedData, null, 2));
+            logger.debug('Translated document received');
 
             if (translatedData.slides && Array.isArray(translatedData.slides)) {
               for (const slide of translatedData.slides) {
@@ -534,27 +529,27 @@ export class TranslationManagementSystem {
               }
             }
           } else {
-            console.warn('⚠️  Document URL not found in document:', doc);
+            logger.warn('Document URL not found in document');
           }
         }
 
-        console.log(`✅ Extracted ${this.state.translations.size} translations`);
+        logger.debug(`Extracted ${this.state.translations.size} translations`);
       } else {
-        console.log('⚠️  No documents found in order, trying alternative methods...');
+        logger.debug('No documents found in order, trying alternative methods...');
 
         if (order.projectId) {
-          console.log(`📥 Fetching documents from project: ${order.projectId}`);
+          logger.debug(`Fetching documents from project: ${order.projectId}`);
 
           try {
             const project = await this.ollangClient.projects.get(order.projectId);
-            console.log('📋 Project structure:', JSON.stringify(project, null, 2));
+            logger.debug('Project structure received');
 
             if ((project as any).targetDocuments && (project as any).targetDocuments.length > 0) {
               const targetDoc = (project as any).targetDocuments[0];
               const documentUrl = targetDoc.url || targetDoc.documentUrl;
 
               if (documentUrl) {
-                console.log(`📥 Downloading from project: ${documentUrl}`);
+                logger.debug(`Downloading from project: ${documentUrl}`);
                 const axios = require('axios');
                 const response = await axios.get(documentUrl, {
                   responseType: 'json',
@@ -583,7 +578,7 @@ export class TranslationManagementSystem {
               }
             }
           } catch (error) {
-            console.error('❌ Error fetching from project:', error);
+            logger.error('Error fetching from project', error);
           }
         }
 
@@ -603,7 +598,7 @@ export class TranslationManagementSystem {
         }
       }
     } catch (error) {
-      console.error('❌ Error extracting translations:', error);
+      logger.error('Error extracting translations', error);
       throw error;
     }
   }
@@ -723,7 +718,7 @@ export class TranslationManagementSystem {
               const absoluteFilePath = path.resolve(this.config.projectRoot, filePath);
               if (!absoluteFilePath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
                   absoluteFilePath !== path.resolve(this.config.projectRoot)) {
-                console.warn(`   ⚠️ Skipping path outside project root: ${filePath}`);
+                logger.warn(`Skipping path outside project root: ${filePath}`);
                 continue;
               }
 
@@ -735,13 +730,13 @@ export class TranslationManagementSystem {
 
               fileGroups.get(filePath)!.set(key, translation.translatedText);
 
-              console.log(`   Mapped: ${key} -> ${filePath}`);
+              logger.debug(`Mapped: ${key} -> ${filePath}`);
             }
           }
         }
       }
 
-      console.log(`   Found ${fileGroups.size} files to update`);
+      logger.debug(`Found ${fileGroups.size} files to update`);
 
       let updatedFiles = 0;
 
@@ -755,11 +750,11 @@ export class TranslationManagementSystem {
           const absoluteTargetPath = path.resolve(this.config.projectRoot, targetFilePath);
           if (!absoluteTargetPath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
               absoluteTargetPath !== path.resolve(this.config.projectRoot)) {
-            console.warn(`   ⚠️ Skipping target path outside project root: ${targetFilePath}`);
+            logger.warn(`Skipping target path outside project root: ${targetFilePath}`);
             continue;
           }
 
-          console.log(`   Processing: ${targetFilePath}`);
+          logger.debug(`Processing: ${targetFilePath}`);
 
           const targetDir = path.dirname(absoluteTargetPath);
           await fs.mkdir(targetDir, { recursive: true });
@@ -769,7 +764,7 @@ export class TranslationManagementSystem {
             const content = await fs.readFile(absoluteTargetPath, 'utf-8');
             existingContent = JSON.parse(content);
           } catch (error) {
-            console.log(`   Creating new file: ${targetFilePath}`);
+            logger.debug(`Creating new file: ${targetFilePath}`);
           }
 
           for (const [key, value] of translations) {
@@ -792,17 +787,17 @@ export class TranslationManagementSystem {
             'utf-8'
           );
 
-          console.log(`   ✅ Updated: ${targetFilePath} (${translations.size} keys)`);
+          logger.debug(`Updated: ${targetFilePath} (${translations.size} keys)`);
           updatedFiles++;
         } catch (error) {
-          console.error(`   ❌ Error updating ${originalFilePath}:`, error);
+          logger.error(`Error updating ${originalFilePath}`, error);
         }
       }
 
-      console.log(`✅ Applied translations to ${updatedFiles} files`);
+      logger.debug(`Applied translations to ${updatedFiles} files`);
 
       if (this.state.imageTranslations && this.state.imageTranslations.size > 0) {
-        console.log(`\n🖼️  Applying ${this.state.imageTranslations.size} image translations...`);
+        logger.debug(`Applying ${this.state.imageTranslations.size} image translations...`);
 
         for (const [imageId, translation] of this.state.imageTranslations) {
           if (translation.targetLanguage !== targetLanguage) {
@@ -877,7 +872,7 @@ export class TranslationManagementSystem {
 
       await fs.writeFile(filePath, content, 'utf-8');
     } catch (error) {
-      console.error(`   ❌ Error replacing URL in ${filePath}:`, error);
+      logger.error(`Error replacing URL in ${filePath}`, error);
       throw error;
     }
   }

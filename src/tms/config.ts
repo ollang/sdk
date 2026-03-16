@@ -1,4 +1,5 @@
 import { TMSConfig, ControlPanelConfig } from './types.js';
+import { logger } from '../logger.js';
 
 export const DEFAULT_PANEL_CONFIG: ControlPanelConfig = {
   position: 'bottom-right',
@@ -33,7 +34,7 @@ export const DEFAULT_TMS_CONFIG: Partial<TMSConfig> = {
 
   ollang: {
     apiKey: '',
-    baseUrl: 'http://localhost:8080', // TODO: Change to 'https://api-integration.ollang.com' before npm publish
+    baseUrl: 'https://api-integration.ollang.com',
     defaultLevel: 0,
   },
 
@@ -101,11 +102,11 @@ export class ConfigManager {
         if (fs.existsSync(configPath)) {
           const content = fs.readFileSync(configPath, 'utf-8');
           const config = JSON.parse(content);
-          console.log(`✅ Loaded config from: ${path.basename(configPath)}`);
+          logger.debug(`Loaded config from: ${path.basename(configPath)}`);
           return config;
         }
       } catch (error) {
-        console.warn(`⚠️  Failed to load config from ${configPath}:`, error);
+        logger.error(`Failed to load config from ${configPath}`, error);
       }
     }
 
@@ -179,7 +180,7 @@ export class ConfigManager {
     }
 
     if (!config.ollang.apiKey) {
-      console.warn('⚠️  OLLANG_API_KEY not set. Translation features will not work.');
+      logger.warn('OLLANG_API_KEY not set. Translation features will not work.');
     }
   }
 

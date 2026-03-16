@@ -112,7 +112,6 @@ function App() {
           updateLastScanTime(data.scans, selectedFolderFilter);
         }
       } catch (error) {
-        console.error('Failed to load folder scans:', error);
       } finally {
         setIsLoadingScans(false);
       }
@@ -142,7 +141,6 @@ function App() {
         setShowApiKeyDialog(true);
       }
     } catch (error) {
-      console.error('Failed to load config:', error);
     }
   };
 
@@ -165,7 +163,6 @@ function App() {
         }
       }
     } catch (error) {
-      console.error('Failed to load folders:', error);
     } finally {
       setIsLoadingScans(false);
     }
@@ -216,7 +213,6 @@ function App() {
         setLastScanTime(data.lastScanTime);
       }
     } catch (error) {
-      console.error('Scan failed:', error);
     } finally {
       setIsScanning(false);
     }
@@ -254,7 +250,6 @@ function App() {
         await loadFolders();
       }
     } catch (error) {
-      console.error('Scan failed:', error);
     } finally {
       setIsScanning(false);
     }
@@ -285,7 +280,6 @@ function App() {
         );
       }
     } catch (error) {
-      console.error('Failed to save API key:', error);
       setApiKeyError('Could not reach Ollang local server. Please try again.');
     } finally {
       setIsSavingApiKey(false);
@@ -305,11 +299,9 @@ function App() {
   };
 
   const startPolling = () => {
-    console.log('🔄 Starting polling...');
     const pollInterval = setInterval(async () => {
       try {
         if (!selectedFolderFilter) {
-          console.log('⚠️ No folder selected, skipping poll');
           return;
         }
 
@@ -347,14 +339,12 @@ function App() {
           }
         }
       } catch (error) {
-        console.error('❌ Polling error:', error);
       }
     }, 10000);
 
     setTimeout(() => {
       clearInterval(pollInterval);
       setIsTranslating(false);
-      console.log('⏱️ Polling timeout reached (5 minutes)');
     }, 300000);
   };
 
@@ -392,11 +382,9 @@ function App() {
 
       const data = await response.json();
       if (data.success) {
-        console.log('Translation started, polling for updates...');
         startPolling();
       }
     } catch (error) {
-      console.error('Translation failed:', error);
       setTexts((prev) =>
         prev.map((t) => (selected.find((s) => s.id === t.id) ? { ...t, status: 'scanned' } : t))
       );
@@ -468,7 +456,6 @@ function App() {
         setTexts(updatedTexts);
       }
     } catch (error) {
-      console.error('Apply failed:', error);
     } finally {
       setIsApplying(false);
     }

@@ -311,8 +311,6 @@ export function Header({
         videoTranslationType,
       };
 
-      console.log('Sending config update:', payload);
-
       const headers = apiHeaders
         ? apiHeaders({ 'Content-Type': 'application/json' })
         : { 'Content-Type': 'application/json' };
@@ -324,16 +322,12 @@ export function Header({
       });
 
       const data = await response.json();
-      console.log('Config update response:', data);
 
       if (data.success) {
         setShowSettingsDialog(false);
         onConfigUpdate();
-      } else {
-        console.error('Config update failed:', data.error);
       }
     } catch (error) {
-      console.error('Failed to save settings:', error);
     } finally {
       setIsSaving(false);
     }

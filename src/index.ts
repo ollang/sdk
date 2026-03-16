@@ -7,6 +7,7 @@ import { CustomInstructions } from './resources/customInstructions';
 import { Scans, ScanSessionResponse } from './resources/scans';
 import { CMS } from './resources/cms';
 import { OllangConfig } from './types';
+import { logger } from './logger.js';
 
 export class Ollang {
   private client: OllangClient;
@@ -38,10 +39,10 @@ export class Ollang {
   ): Promise<ScanSessionResponse> {
     try {
       this.scanSession = await this.scans.getOrCreateSession(projectId, folderName);
-      console.log('✅ Scan session initialized:', this.scanSession.id);
+      logger.debug('Scan session initialized:', this.scanSession.id);
       return this.scanSession;
     } catch (error) {
-      console.error('❌ Failed to initialize scan session:', error);
+      logger.error('Failed to initialize scan session', error);
       throw error;
     }
   }

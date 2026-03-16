@@ -12,6 +12,7 @@ import {
 } from './detector/content-type-detector.js';
 import { TMSConfig } from './types.js';
 import { OrderType, CreateOrderParams } from '../types/index.js';
+import { logger } from '../logger.js';
 
 export interface MultiContentScanResult {
   i18n: I18nContent[];
@@ -59,7 +60,7 @@ export class MultiContentTMS {
   }
 
   async scanAll(): Promise<MultiContentScanResult> {
-    console.log('🔍 Scanning project for all content types...');
+    logger.debug('Scanning project for all content types...');
 
     const detectionConfig = {
       includePaths: this.config.detection.includePaths.map(
@@ -135,7 +136,7 @@ export class MultiContentTMS {
     targetLanguage: string,
     level: number
   ): Promise<TranslationResult> {
-    console.log('🎬 Creating AI Dubbing orders for videos...');
+    logger.debug('Creating AI Dubbing orders for videos...');
 
     if (videos.length === 0) {
       throw new Error('No videos to translate');
@@ -304,13 +305,13 @@ export class MultiContentTMS {
     const maxAttempts = maxWaitSeconds / 5;
     let attempts = 0;
 
-    console.log(`⏳ Waiting for order ${orderId} to complete...`);
+    logger.debug(`Waiting for order ${orderId} to complete...`);
 
     while (attempts < maxAttempts) {
       const order = await this.ollangClient.orders.get(orderId);
 
       if (order.status === 'completed') {
-        console.log(`✅ Order ${orderId} completed!`);
+        logger.debug(`Order ${orderId} completed`);
         return order;
       }
 

@@ -27,25 +27,18 @@ import { OllangBrowser, OllangBrowserConfig } from './index';
     return;
   }
 
-  if (!config.apiKey) {
-    console.log('Ollang: API key not provided. User will be prompted to enter it.');
-  }
-
   function initOllang() {
     (window as any).Ollang = OllangBrowser;
     const instance = new OllangBrowser(config);
     (window as any).ollangInstance = instance;
     (window as any).ollang = instance;
-    console.log('✅ Ollang Browser SDK initialized (v2 - API Interception)');
 
     const urlParams = new URLSearchParams(window.location.search);
     const hasLocalizeParam = urlParams.get('ollang-localize') === 'true';
 
     if (hasLocalizeParam) {
       setTimeout(() => {
-        instance.showDebugPanel().catch((err) => {
-          console.error('Failed to show debug panel:', err);
-        });
+        instance.showDebugPanel().catch(() => {});
       }, 1000);
     }
   }

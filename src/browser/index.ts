@@ -179,13 +179,15 @@ export class OllangBrowser {
     this.interceptApiCalls();
 
     this.loadI18nFiles().then(() => {
-      console.log(`✅ Loaded ${this.i18nTexts.size} i18n texts from files`);
+      if (this.config.debug) console.log(`✅ Loaded ${this.i18nTexts.size} i18n texts from files`);
       this.detectFrameworkI18n();
 
       setTimeout(() => {
-        console.log(
-          `🔍 Starting capture with ${this.i18nTexts.size} i18n texts and ${this.strapiContentMap.size} Strapi contents tracked`
-        );
+        if (this.config.debug) {
+          console.log(
+            `🔍 Starting capture with ${this.i18nTexts.size} i18n texts and ${this.strapiContentMap.size} Strapi contents tracked`
+          );
+        }
         this.startCapture();
       }, 3000);
     });
@@ -305,9 +307,11 @@ export class OllangBrowser {
       this.extractStrapiFields(entry.attributes, contentType, entryId, '');
     }
 
-    console.log(
-      `📦 Strapi [${contentType}]: captured ${entries.length} entries, total tracked: ${this.strapiContentMap.size}`
-    );
+    if (this.config.debug) {
+      console.log(
+        `📦 Strapi [${contentType}]: captured ${entries.length} entries, total tracked: ${this.strapiContentMap.size}`
+      );
+    }
   }
 
   private static readonly MAX_FIELD_LENGTH = 500;
@@ -604,10 +608,10 @@ export class OllangBrowser {
         const translations = this.getAngularTranslations();
         if (translations) {
           this.extractTextsFromObject(translations);
-          console.log('✅ Loaded Angular translations from runtime');
+          if (this.config.debug) console.log('✅ Loaded Angular translations from runtime');
         }
       } catch (e) {
-        console.warn('Could not auto-detect Angular translations:', e);
+        if (this.config.debug) console.warn('Could not auto-detect Angular translations');
       }
     }, 1500);
 
@@ -617,7 +621,7 @@ export class OllangBrowser {
         const translations = i18n.store.data[i18n.language];
         if (translations) {
           this.extractTextsFromObject(translations);
-          console.log('✅ Loaded React i18next translations');
+          if (this.config.debug) console.log('✅ Loaded React i18next translations');
         }
       }
     }
@@ -628,13 +632,13 @@ export class OllangBrowser {
         Object.values(vueI18n.messages).forEach((msgs: any) => {
           this.extractTextsFromObject(msgs);
         });
-        console.log('✅ Loaded Vue i18n translations');
+        if (this.config.debug) console.log('✅ Loaded Vue i18n translations');
       }
     }
 
     if ((window as any).__NEXT_DATA__?.props?.pageProps?.messages) {
       this.extractTextsFromObject((window as any).__NEXT_DATA__.props.pageProps.messages);
-      console.log('✅ Loaded Next.js translations');
+      if (this.config.debug) console.log('✅ Loaded Next.js translations');
     }
   }
 
@@ -696,7 +700,7 @@ export class OllangBrowser {
             if (response.ok) {
               const data = await response.json();
               this.extractTextsFromObject(data);
-              console.log(`✅ Auto-loaded i18n: ${url}`);
+              if (this.config.debug) console.log(`✅ Auto-loaded i18n: ${url}`);
             }
           } catch (error) {}
         }
@@ -710,7 +714,7 @@ export class OllangBrowser {
         const data = await response.json();
         this.extractTextsFromObject(data);
       } catch (error) {
-        console.warn(`Failed to load i18n file: ${fileUrl}`, error);
+        if (this.config.debug) console.warn(`Failed to load i18n file: ${fileUrl}`);
       }
     }
   }
@@ -1288,7 +1292,7 @@ export class OllangBrowser {
       this.extractTextsFromObject(texts);
     }
     const added = this.i18nTexts.size - before;
-    console.log(`✅ Added ${added} new i18n texts (total: ${this.i18nTexts.size})`);
+    if (this.config.debug) console.log(`✅ Added ${added} new i18n texts (total: ${this.i18nTexts.size})`);
     if (added > 0 && this.capturedContent.size > 0) {
       this.clear();
       this.scanPage();
@@ -1326,7 +1330,6 @@ export class OllangBrowser {
       }
       this.showPanelContent();
     } catch (e) {
-      console.error('Failed to validate API key:', e);
       this.showApiKeyFormInPanel();
     }
   }
@@ -2138,7 +2141,7 @@ export class OllangBrowser {
         }
       }
     } catch (e) {
-      console.warn('Failed to load folders:', e);
+      if (this.config.debug) console.warn('Failed to load folders');
     }
   }
 
@@ -2327,7 +2330,7 @@ export class OllangBrowser {
             }
           }
         } catch (e) {
-          if (this.config.debug) console.warn('[Ollang] Could not fetch Strapi field config:', e);
+          if (this.config.debug) console.warn('[Ollang] Could not fetch Strapi field config');
         }
       }
 
@@ -2575,7 +2578,7 @@ export class OllangBrowser {
           }
         }
       } catch (e) {
-        console.warn('Failed to list scans:', e);
+        if (this.config.debug) console.warn('Failed to list scans');
       }
 
       const payload = {
@@ -2606,7 +2609,6 @@ export class OllangBrowser {
       const list = document.getElementById('ollang-content-list');
       if (list) this.showContent(list);
     } catch (e: any) {
-      console.error('Push to Ollang error:', e);
       this.showStatus(`❌ Failed to push to Ollang: ${e.message}`, 'error');
     }
   }

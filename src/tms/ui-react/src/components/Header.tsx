@@ -507,11 +507,11 @@ export function Header({
             <div className="space-y-2">
               <Label htmlFor="targetLanguages">Target Languages</Label>
               <Select
-                // Değer yalnızca Select'in controlled olmasını sağlamak için kullanılıyor;
-                // asıl seçim checkbox'larla yönetiliyor.
+                // Value is only used to keep Select controlled;
+                // actual selection is managed with checkboxes.
                 value={selectedTargetLanguages[0] || ''}
                 onValueChange={() => {
-                  // no-op: seçim toggleTargetLanguage ile yönetiliyor
+                  // no-op: selection is managed with toggleTargetLanguage
                 }}
               >
                 <SelectTrigger id="targetLanguages">

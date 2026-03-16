@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Translation Management System CLI
+ * Ollang Translation System CLI
  *
  * Usage: npx @ollang-dev/sdk start
  */
@@ -10,7 +10,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-console.log('🚀 Translation Management System başlatılıyor...\n');
+console.log('🚀 Ollang Translation System starting...\n');
 
 const serverPath = path.join(__dirname, '..', 'dist', 'tms', 'server', 'index.js');
 
@@ -29,19 +29,19 @@ const server = spawn('node', [serverPath], {
 });
 
 process.on('SIGINT', () => {
-  console.log('\n\n👋 TMS kapatılıyor...');
+  console.log('\n\n👋 Ollang shutting down...');
   server.kill('SIGINT');
   process.exit(0);
 });
 
 server.on('error', (error) => {
-  console.error('❌ Server başlatılamadı:', error.message);
+  console.error('❌ Failed to start server:', error.message);
   process.exit(1);
 });
 
 server.on('exit', (code) => {
   if (code !== 0 && code !== null) {
-    console.error(`❌ Server hata ile kapandı (kod: ${code})`);
+    console.error(`❌ Server closed with error (code: ${code})`);
     process.exit(code);
   }
 });

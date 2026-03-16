@@ -1,6 +1,6 @@
-# Ollang TMS UI (React + Shadcn)
+# Ollang UI
 
-Modern Kanban board interface for Translation Management System.
+Modern interface for Ollang Translation System.
 
 ## Features
 

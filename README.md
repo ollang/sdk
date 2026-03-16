@@ -34,9 +34,9 @@ const order = await ollang.orders.create({
 const status = await ollang.orders.get(order.id);
 ```
 
-## TMS (Translation Management System)
+## Ollang Translation System
 
-Launch the built-in TMS dashboard to scan and manage translatable content in your project:
+Launch the built-in Ollang dashboard to scan and manage translatable content in your project:
 
 ```bash
 npx @ollang-dev/sdk start
@@ -44,15 +44,15 @@ npx @ollang-dev/sdk start
 
 ## Resources
 
-| Resource | Description |
-|----------|-------------|
-| `ollang.projects` | Create and manage projects |
-| `ollang.uploads` | Upload files (video, audio, documents) |
-| `ollang.orders` | Create and track translation orders |
-| `ollang.revisions` | Request revisions on completed orders |
-| `ollang.customInstructions` | Set custom translation instructions |
-| `ollang.scans` | Scan content for translatable text |
-| `ollang.cms` | CMS integration |
+| Resource                    | Description                            |
+| --------------------------- | -------------------------------------- |
+| `ollang.projects`           | Create and manage projects             |
+| `ollang.uploads`            | Upload files (video, audio, documents) |
+| `ollang.orders`             | Create and track translation orders    |
+| `ollang.revisions`          | Request revisions on completed orders  |
+| `ollang.customInstructions` | Set custom translation instructions    |
+| `ollang.scans`              | Scan content for translatable text     |
+| `ollang.cms`                | CMS integration                        |
 
 ## Documentation
 

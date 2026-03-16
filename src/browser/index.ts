@@ -1468,7 +1468,7 @@ export class OllangBrowser {
       </div>
       <div id="ollang-strapi-schema-block" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
         <span style="font-size: 11px; font-weight: 500; color: #64748b;">Strapi schema (optional)</span>
-        <p style="margin: 4px 0 8px 0; font-size: 11px; color: #94a3b8;">Fetch schema here so Push uses Content-Type Builder fields. Use your Strapi API token (not the Ollang TMS API token).</p>
+        <p style="margin: 4px 0 8px 0; font-size: 11px; color: #94a3b8;">Fetch schema here so Push uses Content-Type Builder fields. Use your Strapi API token (not the Ollang API token).</p>
         <div style="display: flex; flex-direction: column; gap: 6px;">
           <input type="text" id="ollang-strapi-url" placeholder="Strapi URL (e.g. https://api.example.com)" style="width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; box-sizing: border-box;" />
           <input type="password" id="ollang-strapi-jwt" placeholder="Strapi Admin JWT token" style="width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; box-sizing: border-box;" />
@@ -1538,7 +1538,9 @@ export class OllangBrowser {
         this.getCmsContent().forEach((c) => this.selectedContentIds.add(c.id));
         this.showContent(contentList);
       });
-      document.getElementById('ollang-push-tms')?.addEventListener('click', () => this.pushToTMS());
+      document
+        .getElementById('ollang-push-tms')
+        ?.addEventListener('click', () => this.pushToOllang());
       document
         .getElementById('ollang-fetch-schema')
         ?.addEventListener('click', () => this.fetchStrapiSchemaInPanel());
@@ -2225,7 +2227,7 @@ export class OllangBrowser {
   private async fetchStrapiSchemaInPanel(): Promise<void> {
     const baseUrl = (this.config.baseUrl || '').replace(/\/$/, '');
     if (!baseUrl) {
-      this.showStatus('Missing TMS baseUrl', 'error');
+      this.showStatus('Missing Ollang baseUrl', 'error');
       return;
     }
     const urlInput = document.getElementById('ollang-strapi-url') as HTMLInputElement;
@@ -2259,7 +2261,7 @@ export class OllangBrowser {
     }
   }
 
-  private async pushToTMS(): Promise<void> {
+  private async pushToOllang(): Promise<void> {
     if (this.selectedContentIds.size === 0) {
       this.showStatus('Please select at least one item', 'error');
       return;
@@ -2269,7 +2271,7 @@ export class OllangBrowser {
       return;
     }
     if (!this.config.apiKey) {
-      this.showStatus('Please enter TMS API token first', 'error');
+      this.showStatus('Please enter Ollang API token first', 'error');
       return;
     }
     const baseUrl = (this.config.baseUrl || '').replace(/\/$/, '');

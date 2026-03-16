@@ -66,12 +66,12 @@ app.use('/api', (req, res, next) => {
 
   const providedKey =
     (req.headers['x-api-key'] as string) ||
-    (req.headers.authorization?.startsWith('Bearer ')
-      ? req.headers.authorization.slice(7)
-      : '');
+    (req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7) : '');
 
   if (providedKey !== configuredKey) {
-    return res.status(401).json({ success: false, error: 'Unauthorized: invalid or missing API key' });
+    return res
+      .status(401)
+      .json({ success: false, error: 'Unauthorized: invalid or missing API key' });
   }
   next();
 });
@@ -117,7 +117,7 @@ async function updateCurrentScan(folderName?: string) {
   const { currentScanId, texts, videos, images, audios } = state;
 
   if (!tms) {
-    console.warn('⚠️  Cannot update scan: TMS not initialized');
+    console.warn('⚠️  Cannot update scan: Ollang not initialized');
     return;
   }
 
@@ -392,7 +392,7 @@ app.post('/api/config/apikey', async (req, res) => {
 
       return res.status(401).json({
         success: false,
-        error: 'Invalid TMS API key. Please check your token and try again.',
+        error: 'Invalid Ollang API key. Please check your token and try again.',
       });
     }
   } catch (error: any) {
@@ -429,7 +429,10 @@ app.post('/api/config/update', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid target language format' });
     }
     if (!VALID_VIDEO_TYPES.includes(videoTranslationType)) {
-      return res.status(400).json({ success: false, error: 'Invalid video translation type. Must be aiDubbing or subtitle.' });
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid video translation type. Must be aiDubbing or subtitle.',
+      });
     }
 
     process.env.TMS_SOURCE_LANGUAGE = sourceLanguage;
@@ -440,12 +443,16 @@ app.post('/api/config/update', async (req, res) => {
     const path = require('path');
     const configPath = path.join(PROJECT_ROOT, 'ollang.config.ts');
 
-    const configContent = `export default ${JSON.stringify({
-      projectRoot: PROJECT_ROOT,
-      sourceLanguage,
-      targetLanguages,
-      video: { translationType: videoTranslationType },
-    }, null, 2)};\n`;
+    const configContent = `export default ${JSON.stringify(
+      {
+        projectRoot: PROJECT_ROOT,
+        sourceLanguage,
+        targetLanguages,
+        video: { translationType: videoTranslationType },
+      },
+      null,
+      2
+    )};\n`;
 
     await fs.writeFile(configPath, configContent, 'utf-8');
     tms = await initTMS();
@@ -697,7 +704,7 @@ app.post('/api/translate', async (req, res) => {
     if (!tms) {
       return res.status(400).json({
         success: false,
-        error: 'TMS not initialized. Please scan first.',
+        error: 'Ollang not initialized. Please scan first.',
       });
     }
 
@@ -732,7 +739,7 @@ app.post('/api/translate', async (req, res) => {
       try {
         console.log(`📂 Loading latest scan for folder: ${folderName}`);
 
-        // Get folderId from TMS server's /api/folders endpoint
+        // Get folderId from Ollang server's /api/folders endpoint
         try {
           const axios = require('axios');
           const foldersResponse = await axios.get('http://localhost:5972/api/folders');
@@ -1058,7 +1065,7 @@ app.post('/api/apply', async (req, res) => {
     if (!tms) {
       return res.status(400).json({
         success: false,
-        error: 'TMS not initialized.',
+        error: 'Ollang not initialized.',
       });
     }
 
@@ -1326,16 +1333,14 @@ function getOllangBackendBase(): string {
 
   try {
     const parsed = new URL(backendBase);
-    const allowedHosts = new Set([
-      'localhost',
-      '127.0.0.1',
-      'api-integration.ollang.com',
-    ]);
+    const allowedHosts = new Set(['localhost', '127.0.0.1', 'api-integration.ollang.com']);
     const extraHosts = (process.env.OLLANG_ALLOWED_HOSTS || '').split(',').filter(Boolean);
     extraHosts.forEach((h) => allowedHosts.add(h.trim()));
 
     if (!allowedHosts.has(parsed.hostname)) {
-      console.warn(`\u26a0\ufe0f Backend URL hostname "${parsed.hostname}" not in allowlist, using default`);
+      console.warn(
+        `\u26a0\ufe0f Backend URL hostname "${parsed.hostname}" not in allowlist, using default`
+      );
       return 'http://localhost:8080';
     }
   } catch {
@@ -1645,7 +1650,7 @@ app.post('/api/strapi-schema', async (req, res) => {
       return res.status(400).json({
         success: false,
         error:
-          'strapiUrl and strapiToken (Strapi API token) are required. This is not the Ollang TMS API token.',
+          'strapiUrl and strapiToken (Strapi API token) are required. This is not the Ollang API token.',
       });
     }
     const base = String(strapiUrl).replace(/\/$/, '');

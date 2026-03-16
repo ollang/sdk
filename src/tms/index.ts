@@ -1,5 +1,5 @@
 /**
- * Translation Management System - Public API
+ * Ollang SDK - Public API
  */
 
 export { TranslationManagementSystem } from './tms.js';

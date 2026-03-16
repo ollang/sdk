@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Scan, Settings, Key } from 'lucide-react';
 import { Config } from '@/types';
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import OllangLogo from '@/assets/o-logo.svg';
 import {
   Dialog,
@@ -34,8 +34,8 @@ interface HeaderProps {
   onFolderChange: (folder: string) => void;
   onCreateNewFolder: () => void;
   isCmsFolder: boolean;
-  targetLanguage: string;
-  onTargetLanguageChange: (lang: string) => void;
+  targetLanguages: string[];
+  onTargetLanguagesChange: (langs: string[]) => void;
   apiHeaders?: (extra?: Record<string, string>) => Record<string, string>;
 }
 
@@ -52,8 +52,8 @@ export function Header({
   onFolderChange,
   onCreateNewFolder,
   isCmsFolder,
-  targetLanguage,
-  onTargetLanguageChange,
+  targetLanguages: activeTargetLanguages,
+  onTargetLanguagesChange,
   apiHeaders,
 }: HeaderProps) {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
@@ -63,6 +63,27 @@ export function Header({
   );
   const [isSaving, setIsSaving] = useState(false);
   const [selectedTargetLanguages, setSelectedTargetLanguages] = useState<string[]>([]);
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const [langSearch, setLangSearch] = useState('');
+  const langDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (langDropdownRef.current && !langDropdownRef.current.contains(e.target as Node)) {
+        setLangDropdownOpen(false);
+        setLangSearch('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleActiveTargetLanguage = (value: string) => {
+    const next = activeTargetLanguages.includes(value)
+      ? activeTargetLanguages.filter((v) => v !== value)
+      : [...activeTargetLanguages, value];
+    onTargetLanguagesChange(next);
+  };
 
   // Full language list copied from client dashboard AppConstants.languageAndFlagList
   const languageMap: { [key: string]: { title: string } } = {
@@ -368,6 +389,7 @@ export function Header({
           <div className="flex items-center gap-3">
             <img src={OllangLogo} alt="Ollang logo" className="h-8 w-auto" />
             <h1 className="text-2xl font-bold">Ollang</h1>
+            <span className="text-[10px] font-semibold uppercase tracking-wider bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded">Beta</span>
           </div>
         </div>
 
@@ -410,26 +432,86 @@ export function Header({
 
           <div className="flex items-center gap-3 flex-wrap justify-end">
             {config?.targetLanguages && config.targetLanguages.length > 0 && (
-              <div className="flex items-center gap-2">
-                <Label htmlFor="global-target-language whitespace-nowrap">Target Language</Label>
-                <Select
-                  value={targetLanguage}
-                  onValueChange={onTargetLanguageChange}
+              <div className="flex items-center gap-2 relative" ref={langDropdownRef}>
+                <Label className="whitespace-nowrap">Target Languages</Label>
+                <button
+                  type="button"
                   disabled={!config.hasApiKey}
+                  onClick={() => {
+                    setLangDropdownOpen((o) => !o);
+                    setLangSearch('');
+                  }}
+                  className="flex items-center gap-1 min-w-[180px] max-w-[320px] border rounded-md px-3 py-2 text-sm bg-background hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <SelectTrigger id="global-target-language" className="min-w-[180px]">
-                    <SelectValue placeholder="Select target language" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {languageOptions
-                      .filter((opt) => config.targetLanguages.includes(opt.value))
-                      .map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                  {activeTargetLanguages.length === 0 ? (
+                    <span className="text-muted-foreground">Select languages...</span>
+                  ) : (
+                    <span className="truncate">
+                      {activeTargetLanguages.length} language{activeTargetLanguages.length !== 1 ? 's' : ''} selected
+                    </span>
+                  )}
+                  <svg className="ml-auto h-4 w-4 shrink-0 opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                {langDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-1 z-50 w-[280px] rounded-md border bg-popover shadow-md">
+                    <div className="p-2 border-b">
+                      <Input
+                        placeholder="Search languages..."
+                        value={langSearch}
+                        onChange={(e) => setLangSearch(e.target.value)}
+                        className="h-8"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="max-h-[200px] overflow-auto p-1">
+                      {languageOptions
+                        .filter((opt) => config.targetLanguages.includes(opt.value))
+                        .filter((opt) =>
+                          langSearch
+                            ? opt.label.toLowerCase().includes(langSearch.toLowerCase()) ||
+                              opt.value.toLowerCase().includes(langSearch.toLowerCase())
+                            : true
+                        )
+                        .map((opt) => (
+                          <label
+                            key={opt.value}
+                            className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-accent cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              className="h-3.5 w-3.5"
+                              checked={activeTargetLanguages.includes(opt.value)}
+                              onChange={() => toggleActiveTargetLanguage(opt.value)}
+                            />
+                            <span>{opt.label}</span>
+                            <span className="text-xs text-muted-foreground ml-auto">{opt.value}</span>
+                          </label>
+                        ))}
+                    </div>
+                    {activeTargetLanguages.length > 0 && (
+                      <div className="border-t p-2 flex gap-1 flex-wrap">
+                        {activeTargetLanguages.map((val) => {
+                          const lang = languageOptions.find((o) => o.value === val);
+                          return (
+                            <span
+                              key={val}
+                              className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary px-2 py-0.5 text-xs"
+                            >
+                              {lang?.label || val}
+                              <button
+                                type="button"
+                                onClick={() => toggleActiveTargetLanguage(val)}
+                                className="hover:text-destructive"
+                              >
+                                ×
+                              </button>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 

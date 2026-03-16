@@ -34,7 +34,9 @@ const order = await ollang.orders.create({
 const status = await ollang.orders.get(order.id);
 ```
 
-## Ollang Translation System
+## Ollang SDK (BETA)
+
+> **Note:** Ollang SDK is currently in **BETA**. Features and APIs may change.
 
 Launch the built-in Ollang dashboard to scan and manage translatable content in your project:
 

@@ -820,7 +820,9 @@ app.post('/api/translate', async (req, res) => {
     const imageItems = selectedItems.filter((item) => item.category === 'image');
     const audioItems = selectedItems.filter((item) => item.category === 'audio');
 
-    logger.debug(`Translation breakdown: i18n=${i18nItems.length}, videos=${videoItems.length}, images=${imageItems.length}, audios=${audioItems.length}`);
+    logger.debug(
+      `Translation breakdown: i18n=${i18nItems.length}, videos=${videoItems.length}, images=${imageItems.length}, audios=${audioItems.length}`
+    );
 
     // Log cmsFields info for entry-based items
     for (const item of i18nItems) {
@@ -1188,7 +1190,9 @@ app.post('/api/apply', async (req, res) => {
         effectiveStrapiToken || process.env.STRAPI_TOKEN || process.env.STRAPI_API_TOKEN || '';
 
       if (!strapiUrl || !strapiToken) {
-        logger.warn('STRAPI_URL and STRAPI_TOKEN env vars required for CMS push. Skipping Strapi push.');
+        logger.warn(
+          'STRAPI_URL and STRAPI_TOKEN env vars required for CMS push. Skipping Strapi push.'
+        );
       } else {
         logger.debug(`Pushing ${cmsEntryItems.length} CMS entries to Strapi (${strapiUrl})...`);
 
@@ -1687,7 +1691,7 @@ app.get('*', (_req, res) => {
 });
 
 app.listen(PORT, () => {
-  logger.info('🚀 Translation Management System starting...');
+  logger.info('🚀 Ollang SDK starting... (BETA)');
   logger.info(`📦 Project: ${PROJECT_ROOT}`);
   logger.info(`🌐 Control panel: http://localhost:${PORT}`);
   logger.info(`💡 Opening in your browser...`);

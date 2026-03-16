@@ -1,6 +1,8 @@
-# Ollang UI
+# Ollang UI (BETA)
 
 Modern interface for Ollang Translation System.
+
+> **Note:** This UI is currently in **BETA**. Features and APIs may change.
 
 ## Features
 

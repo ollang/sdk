@@ -35,7 +35,7 @@ function App() {
   const [isSavingApiKey, setIsSavingApiKey] = useState(false);
   const [folders, setFolders] = useState<Array<{ id: string; name: string; isCms?: boolean }>>([]);
   const [selectedFolderFilter, setSelectedFolderFilter] = useState<string>('');
-  const [targetLanguage, setTargetLanguage] = useState('tr');
+  const [targetLanguages, setTargetLanguages] = useState<string[]>([]);
   const [lastScanTime, setLastScanTime] = useState<string | null>(null);
 
   useEffect(() => {
@@ -136,6 +136,10 @@ function App() {
       const response = await fetch('/api/config');
       const data = await response.json();
       setConfig(data);
+
+      if (data.targetLanguages && data.targetLanguages.length > 0 && targetLanguages.length === 0) {
+        setTargetLanguages(data.targetLanguages);
+      }
 
       if (!data.hasApiKey) {
         setShowApiKeyDialog(true);
@@ -375,7 +379,7 @@ function App() {
         headers: apiHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           textIds: selected.map((t) => t.id),
-          targetLanguage,
+          targetLanguages,
           folderName: selectedFolderFilter,
         }),
       });
@@ -419,7 +423,7 @@ function App() {
 
     try {
       const body: Record<string, any> = {
-        targetLanguage,
+        targetLanguage: targetLanguages[0],
         textIds: translated.map((t) => t.id),
         folderName: selectedFolderFilter,
       };
@@ -441,7 +445,7 @@ function App() {
           if (t.selected && t.status === 'translated') {
             const statusByLanguage = {
               ...(t.statusByLanguage || {}),
-              [targetLanguage]: 'submitted' as const,
+              [targetLanguages[0]]: 'submitted' as const,
             };
             return {
               ...t,
@@ -485,8 +489,8 @@ function App() {
         onFolderChange={setSelectedFolderFilter}
         onCreateNewFolder={() => setShowFolderNameDialog(true)}
         isCmsFolder={!!folders.find((f) => f.name === selectedFolderFilter)?.isCms}
-        targetLanguage={targetLanguage}
-        onTargetLanguageChange={setTargetLanguage}
+        targetLanguages={targetLanguages}
+        onTargetLanguagesChange={setTargetLanguages}
         apiHeaders={apiHeaders}
       />
 
@@ -519,7 +523,8 @@ function App() {
               .filter((t) => (t as any).folderName === selectedFolderFilter)
               .map((t) => {
                 const byLang = (t as any).statusByLanguage || {};
-                const langStatus = byLang[targetLanguage];
+                const primaryLang = targetLanguages[0];
+                const langStatus = primaryLang ? byLang[primaryLang] : undefined;
 
                 let status: TranslatableText['status'];
                 if (
@@ -528,7 +533,7 @@ function App() {
                   langStatus === 'submitted'
                 ) {
                   status = langStatus;
-                } else if (t.translations && t.translations[targetLanguage]) {
+                } else if (primaryLang && t.translations && t.translations[primaryLang]) {
                   status = 'translated';
                 } else {
                   status = 'scanned';

@@ -241,7 +241,7 @@ async function initTMS() {
 
     ollang: {
       apiKey,
-      baseUrl: 'http://localhost:8080',
+      baseUrl: 'https://api-integration.ollang.com',
       projectId,
       defaultLevel: 0,
       mockMode: process.env.TMS_MOCK_MODE === 'true',
@@ -359,6 +359,8 @@ app.post('/api/config/apikey', async (req, res) => {
         throw new Error('Base URL is not configured');
       }
 
+      console.warn('🔍 Validating API key with base URL:', baseUrl);
+
       const response = await fetch(`${baseUrl}/scans/folders`, {
         method: 'GET',
         headers: {
@@ -385,7 +387,7 @@ app.post('/api/config/apikey', async (req, res) => {
         message: 'API key validated and updated successfully',
       });
     } catch (validationError: any) {
-      console.error('❌ API key validation failed:', validationError.message);
+      console.error('❌ Test API key validation failed:', validationError.message);
 
       process.env.OLLANG_API_KEY = previousApiKey;
       tms = await initTMS();

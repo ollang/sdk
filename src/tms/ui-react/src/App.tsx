@@ -132,19 +132,16 @@ function App() {
   };
 
   const loadConfig = async () => {
-    try {
-      const response = await fetch('/api/config');
-      const data = await response.json();
-      setConfig(data);
+    const response = await fetch('/api/config');
+    const data = await response.json();
+    setConfig(data);
 
-      if (data.targetLanguages && data.targetLanguages.length > 0 && targetLanguages.length === 0) {
-        setTargetLanguages(data.targetLanguages);
-      }
+    if (data.targetLanguages && data.targetLanguages.length > 0 && targetLanguages.length === 0) {
+      setTargetLanguages(data.targetLanguages);
+    }
 
-      if (!data.hasApiKey) {
-        setShowApiKeyDialog(true);
-      }
-    } catch (error) {
+    if (!data.hasApiKey) {
+      setShowApiKeyDialog(true);
     }
   };
 
@@ -342,8 +339,7 @@ function App() {
             }
           }
         }
-      } catch (error) {
-      }
+      } catch (error) {}
     }, 10000);
 
     setTimeout(() => {
@@ -422,30 +418,38 @@ function App() {
     const isCms = !!folders.find((f) => f.name === selectedFolderFilter)?.isCms;
 
     try {
-      const body: Record<string, any> = {
-        targetLanguage: targetLanguages[0],
-        textIds: translated.map((t) => t.id),
-        folderName: selectedFolderFilter,
-      };
+      const languagesToApply = targetLanguages.filter((lang) =>
+        translated.some((t) => (t.statusByLanguage || {})[lang] === 'translated')
+      );
 
-      if (isCms && strapiUrl && strapiToken) {
-        body.strapiUrl = strapiUrl;
-        body.strapiToken = strapiToken;
-      }
+      for (const lang of languagesToApply) {
+        const body: Record<string, any> = {
+          targetLanguage: lang,
+          textIds: translated.map((t) => t.id),
+          folderName: selectedFolderFilter,
+        };
 
-      const response = await fetch('/api/apply', {
-        method: 'POST',
-        headers: apiHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify(body),
-      });
+        if (isCms && strapiUrl && strapiToken) {
+          body.strapiUrl = strapiUrl;
+          body.strapiToken = strapiToken;
+        }
 
-      const data = await response.json();
-      if (data.success) {
+        const response = await fetch('/api/apply', {
+          method: 'POST',
+          headers: apiHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify(body),
+        });
+
+        const data = await response.json();
+        if (!data.success) {
+          continue;
+        }
+
         const updatedTexts = texts.map((t) => {
           if (t.selected && t.status === 'translated') {
             const statusByLanguage = {
               ...(t.statusByLanguage || {}),
-              [targetLanguages[0]]: 'submitted' as const,
+              [lang]: 'submitted' as const,
             };
             return {
               ...t,

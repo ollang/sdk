@@ -921,11 +921,17 @@ app.post('/api/translate', async (req, res) => {
                     statusByLanguage,
                   };
                 } else {
-                  const tr = Array.from(translations.values()).find((t) => t.textId === item.id);
+                  const matchedTranslation = Array.from(translations.values()).find(
+                    (t) => t.textId === item.id
+                  );
+
+                  if (!matchedTranslation) {
+                    return;
+                  }
 
                   const mergedTranslations: Record<string, string> = {
                     ...(existing.translations || {}),
-                    ...(tr ? { [lang]: tr.translatedText } : {}),
+                    [lang]: matchedTranslation.translatedText,
                   };
 
                   const statusByLanguage = { ...(existing.statusByLanguage || {}) };
@@ -1113,27 +1119,27 @@ app.post('/api/apply', async (req, res) => {
       }
     }
 
-    let translations = tms.getTranslations();
+    (tms as any)['state'].translations.clear();
 
-    const translatedTexts = folderState.texts.filter(
-      (t) => t.status === 'translated' && t.translations && t.translations[targetLanguage]
-    );
-
-    let loadedCount = 0;
-    translatedTexts.forEach((text) => {
-      if (!translations.has(text.id)) {
-        const translatedText = text.translations![targetLanguage];
-        // @ts-ignore - accessing private state to sync translation
-        tms['state'].translations.set(text.id, {
-          textId: text.id,
-          originalText: text.text,
-          translatedText: translatedText,
-        });
-        loadedCount++;
-      }
+    const translatedTexts = folderState.texts.filter((t) => {
+      const hasRequestedId = !textIds || textIds.length === 0 || textIds.includes(t.id);
+      const hasTargetLangTranslation = !!t.translations && !!t.translations[targetLanguage];
+      return hasRequestedId && hasTargetLangTranslation;
     });
 
-    translations = tms.getTranslations();
+    translatedTexts.forEach((text) => {
+      const translatedText = text.translations![targetLanguage];
+      if (!translatedText) return;
+      // @ts-ignore - accessing private state to sync translation
+      tms['state'].translations.set(text.id, {
+        textId: text.id,
+        originalText: text.text,
+        translatedText,
+        confidence: 1.0,
+      });
+    });
+
+    const translations = tms.getTranslations();
 
     const hasTargetLangTranslation =
       targetLanguage && Array.from(translations.values()).some((t) => !!t && !!t.translatedText);

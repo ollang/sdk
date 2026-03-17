@@ -381,10 +381,12 @@ export class TranslationManagementSystem {
     } else if (params.folderName) {
       logger.debug(`Getting folderId for folder: ${params.folderName}`);
       try {
-        const axios = require('axios');
-        const response = await axios.get('http://localhost:5972/api/folders');
-        const folders = response.data.folders || [];
-        const targetFolder = folders.find((f: any) => f.name === params.folderName);
+        const client = this.ollangClient.getClient();
+        const folders = await client.get<Array<{ id: string; name: string; projectId?: string }>>(
+          '/scans/folders'
+        );
+
+        const targetFolder = folders.find((f) => f.name === params.folderName);
 
         if (targetFolder && targetFolder.id) {
           logger.debug(`Found folderId: ${targetFolder.id}`);

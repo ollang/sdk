@@ -1,6 +1,6 @@
 {
   "name": "@ollang-dev/sdk",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Official TypeScript/Node.js SDK for Ollang API - Translation, Transcription, Dubbing, Closed Captioning, and I18n Management System",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

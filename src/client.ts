@@ -17,6 +17,16 @@ export class OllangClient {
         'Content-Type': 'application/json',
       },
     });
+
+    this.client.interceptors.response.use(
+      (r) => r,
+      (err) => {
+        if (err.response?.data) {
+          console.error('[ollang] API error response:', JSON.stringify(err.response.data, null, 2));
+        }
+        return Promise.reject(err);
+      }
+    );
   }
 
   async get<T>(path: string, params?: any): Promise<T> {

@@ -249,6 +249,10 @@ export interface TMSConfig {
     mockMode?: boolean;
   };
 
+  video?: {
+    translationType?: 'aiDubbing' | 'subtitle';
+  };
+
   ui: ControlPanelConfig;
 }
 

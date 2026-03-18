@@ -512,7 +512,9 @@ export class TranslationManagementSystem {
                     const id: string = element.id;
 
                     const isCmsField = id.startsWith('cms-entry-') || id.includes('__');
-                    const isKnownText = this.state.texts.some((t) => t.id === id);
+                    const isKnownText =
+                      this.state.texts.some((t) => t.id === id) ||
+                      (this.state.currentOrder?.texts || []).some((t) => t.id === id);
 
                     if (!isCmsField && !isKnownText) {
                       continue;
@@ -929,9 +931,34 @@ export class TranslationManagementSystem {
   async translateVideo(
     video: VideoContent,
     targetLanguage: string,
-    level: number = this.config.ollang.defaultLevel
+    level: number = this.config.ollang.defaultLevel,
+    folderName?: string,
+    folderId?: string
   ): Promise<string> {
+    const videoOrderType = (this.config.video?.translationType ||
+      (typeof process !== 'undefined' && process.env?.VIDEO_TRANSLATION_TYPE) ||
+      'aiDubbing') as 'aiDubbing' | 'subtitle';
+
     const isUrl = video.metadata?.isUrl || (video.url && !video.path);
+
+    let videoFolderId = folderId;
+    if (!videoFolderId && folderName) {
+      try {
+        const client = this.ollangClient.getClient();
+        const folders = await client.get<Array<{ id: string; name: string; projectId?: string }>>(
+          '/scans/folders'
+        );
+        const targetFolder = folders.find((f) => f.name === folderName);
+        if (targetFolder?.id) {
+          videoFolderId = targetFolder.id;
+          logger.debug(`Resolved folderId ${videoFolderId} for video upload`);
+        }
+      } catch (error) {
+        logger.warn(`Could not resolve folderId for video upload: ${error}`);
+      }
+    }
+
+    let orderId: string;
 
     if (isUrl && video.url) {
       const getFilenameFromUrl = (url: string): string => {
@@ -942,12 +969,15 @@ export class TranslationManagementSystem {
 
       const filename = getFilenameFromUrl(video.url);
 
-      const uploadParams = {
+      const uploadParams: Record<string, unknown> = {
         url: video.url,
         originalname: filename,
-        size: video.metadata?.size || 0,
+        size: (video.metadata?.size && video.metadata.size > 0) ? video.metadata.size : 1,
         sourceLanguage: this.config.sourceLanguage,
       };
+      if (videoFolderId) {
+        uploadParams.folderId = videoFolderId;
+      }
 
       const uploadResponse = await this.ollangClient
         .getClient()
@@ -956,7 +986,7 @@ export class TranslationManagementSystem {
       const projectId = uploadResponse.projectId;
 
       const orderParams = {
-        orderType: 'aiDubbing' as const,
+        orderType: videoOrderType,
         level,
         projectId,
         targetLanguageConfigs: [
@@ -968,8 +998,7 @@ export class TranslationManagementSystem {
       };
 
       const order = await this.ollangClient.orders.create(orderParams);
-
-      return order.id;
+      orderId = order.id;
     } else {
       const FormData = require('form-data');
       const fs = require('fs');
@@ -978,6 +1007,9 @@ export class TranslationManagementSystem {
       formData.append('file', fs.createReadStream(video.path));
       formData.append('name', `Video-Dubbing-${Date.now()}`);
       formData.append('sourceLanguage', this.config.sourceLanguage);
+      if (videoFolderId) {
+        formData.append('folderId', videoFolderId);
+      }
 
       const uploadResponse = await this.ollangClient
         .getClient()
@@ -986,7 +1018,7 @@ export class TranslationManagementSystem {
       const projectId = uploadResponse.projectId;
 
       const orderParams = {
-        orderType: 'aiDubbing' as const,
+        orderType: videoOrderType,
         level,
         projectId,
         targetLanguageConfigs: [
@@ -998,9 +1030,109 @@ export class TranslationManagementSystem {
       };
 
       const order = await this.ollangClient.orders.create(orderParams);
-
-      return order.id;
+      orderId = order.id;
     }
+
+    const order = await this.pollVideoOrderStatus(orderId);
+    const outputUrl = await this.pollUntilVideoOutput(orderId, order, videoOrderType);
+    return outputUrl || `Order: ${orderId}`;
+  }
+
+  private async pollVideoOrderStatus(orderId: string): Promise<any> {
+    const maxAttempts = 120;
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      const order = await this.ollangClient.orders.get(orderId);
+
+      if (order.status === 'completed') {
+        return order;
+      }
+
+      if (order.status === 'failed' || order.status === 'cancelled') {
+        throw new Error(`Video order ${orderId} ${order.status}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      attempts++;
+    }
+
+    throw new Error(`Video order ${orderId} timed out after ${maxAttempts * 5} seconds`);
+  }
+
+  private async pollUntilVideoOutput(
+    orderId: string,
+    order: any,
+    videoOrderType: 'aiDubbing' | 'subtitle' = 'aiDubbing'
+  ): Promise<string | null> {
+    let currentOrder = order;
+    const maxRetries = 5;
+    let retries = 0;
+
+    while (retries <= maxRetries) {
+      const url = await this.extractVideoOutput(currentOrder, videoOrderType);
+      if (url) {
+        return url;
+      }
+      if (retries < maxRetries) {
+        logger.debug(`Video URL not yet available for order ${orderId}, retrying in 15s (${retries + 1}/${maxRetries})`);
+        await new Promise((resolve) => setTimeout(resolve, 15000));
+        currentOrder = await this.ollangClient.orders.get(orderId);
+        retries++;
+      } else {
+        break;
+      }
+    }
+    return null;
+  }
+
+  private async extractVideoOutput(
+    order: any,
+    videoOrderType: 'aiDubbing' | 'subtitle' = 'aiDubbing'
+  ): Promise<string | null> {
+    if (videoOrderType === 'subtitle') {
+      const vttUrl = order?.vttUrl ?? order?.vttFileUrl;
+      if (vttUrl) {
+        logger.debug(`Found subtitle VTT URL in order: ${vttUrl}`);
+        return vttUrl;
+      }
+    }
+
+    let documents = order?.documents || order?.targetDocuments || order?.orderDocs || order?.docs || [];
+
+    if (!Array.isArray(documents) && order?.document) {
+      documents = [order.document];
+    }
+
+    if (documents.length > 0) {
+      const doc =
+        documents.find((d: any) => d?.type === 'created_embedded_video') ||
+        documents.find((d: any) => d?.type === 'created_ai_dub_audio');
+      const url = doc?.url ?? doc?.targetDocumentUrl ?? doc?.documentUrl;
+      if (url) {
+        logger.debug(`Found dubbed video URL in order: ${url}`);
+        return url;
+      }
+    }
+
+    if (order?.projectId) {
+      try {
+        const project = await this.ollangClient.projects.get(order.projectId);
+        const targetDocs = (project as any)?.targetDocuments || (project as any)?.docs || [];
+        const doc =
+          targetDocs.find((d: any) => d?.type === 'created_embedded_video') ||
+          targetDocs.find((d: any) => d?.type === 'created_ai_dub_audio');
+        const url = doc?.url ?? doc?.targetDocumentUrl ?? doc?.documentUrl;
+        if (url) {
+          logger.debug(`Found dubbed video URL in project: ${url}`);
+          return url;
+        }
+      } catch (err: any) {
+        logger.error('Error fetching video from project', err);
+      }
+    }
+
+    return null;
   }
 
   async translateImage(

@@ -35,5 +35,6 @@ export interface Config {
   projectRoot: string;
   sourceLanguage: string;
   targetLanguages: string[];
+  videoTranslationType?: 'aiDubbing' | 'subtitle';
   hasApiKey: boolean;
 }

@@ -14,7 +14,7 @@ export class Orders {
   constructor(private client: OllangClient) {}
 
   async create(params: CreateOrderParams): Promise<Order> {
-    const response = await this.client.post<Array<{ orderId: string }>>(
+    const response = await this.client.post<Array<{ orderId: string; orderType?: string }>>(
       '/integration/orders/create',
       params
     );
@@ -23,8 +23,27 @@ export class Orders {
       throw new Error('No order ID returned from API');
     }
 
+    let orderId = response[0].orderId;
+
+    const targetType = params.orderType;
+    if (response.length > 1 && (targetType === 'aiDubbing' || targetType === 'subtitle')) {
+      const match = response.find((r) => r.orderType === targetType);
+      if (match) {
+        orderId = match.orderId;
+      } else {
+        for (const item of response) {
+          const order = await this.get(item.orderId);
+          const type = (order as any).type ?? (order as any).orderType;
+          if (type === targetType) {
+            orderId = item.orderId;
+            break;
+          }
+        }
+      }
+    }
+
     return {
-      id: response[0].orderId,
+      id: orderId,
       orderType: params.orderType,
       level: params.level,
       projectId: params.projectId,

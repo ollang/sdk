@@ -38,6 +38,10 @@ export const DEFAULT_TMS_CONFIG: Partial<TMSConfig> = {
     defaultLevel: 0,
   },
 
+  video: {
+    translationType: 'aiDubbing' as const,
+  },
+
   ui: DEFAULT_PANEL_CONFIG,
 };
 
@@ -73,6 +77,12 @@ export class ConfigManager {
         ...configFile?.ollang,
         ...envConfig?.ollang,
         ...customConfig.ollang,
+      },
+      video: {
+        ...(DEFAULT_TMS_CONFIG.video ?? {}),
+        ...configFile?.video,
+        ...envConfig?.video,
+        ...customConfig?.video,
       },
       ui: {
         ...DEFAULT_TMS_CONFIG.ui!,
@@ -136,6 +146,13 @@ export class ConfigManager {
 
     if (process.env.TMS_TARGET_LANGUAGES) {
       config.targetLanguages = process.env.TMS_TARGET_LANGUAGES.split(',').map((l) => l.trim());
+    }
+
+    if (process.env.VIDEO_TRANSLATION_TYPE) {
+      const t = process.env.VIDEO_TRANSLATION_TYPE as 'aiDubbing' | 'subtitle';
+      if (t === 'aiDubbing' || t === 'subtitle') {
+        config.video = { translationType: t };
+      }
     }
 
     return config;

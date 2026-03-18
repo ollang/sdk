@@ -317,8 +317,9 @@ export function Header({
     if (config) {
       setSourceLanguage(config.sourceLanguage);
       setSelectedTargetLanguages(config.targetLanguages || []);
-      // Load video translation type from config if available
-      setVideoTranslationType('aiDubbing'); // Default
+      setVideoTranslationType(
+        config.videoTranslationType === 'subtitle' ? 'subtitle' : 'aiDubbing'
+      );
     }
     setShowSettingsDialog(true);
   };
@@ -389,7 +390,9 @@ export function Header({
           <div className="flex items-center gap-3">
             <img src={OllangLogo} alt="Ollang logo" className="h-8 w-auto" />
             <h1 className="text-2xl font-bold">Ollang</h1>
-            <span className="text-[10px] font-semibold uppercase tracking-wider bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded">Beta</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded">
+              Beta
+            </span>
           </div>
         </div>
 
@@ -447,10 +450,22 @@ export function Header({
                     <span className="text-muted-foreground">Select languages...</span>
                   ) : (
                     <span className="truncate">
-                      {activeTargetLanguages.length} language{activeTargetLanguages.length !== 1 ? 's' : ''} selected
+                      {activeTargetLanguages.length} language
+                      {activeTargetLanguages.length !== 1 ? 's' : ''} selected
                     </span>
                   )}
-                  <svg className="ml-auto h-4 w-4 shrink-0 opacity-50" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                  <svg
+                    className="ml-auto h-4 w-4 shrink-0 opacity-50"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
                 </button>
                 {langDropdownOpen && (
                   <div className="absolute top-full left-0 mt-1 z-50 w-[280px] rounded-md border bg-popover shadow-md">
@@ -484,7 +499,9 @@ export function Header({
                               onChange={() => toggleActiveTargetLanguage(opt.value)}
                             />
                             <span>{opt.label}</span>
-                            <span className="text-xs text-muted-foreground ml-auto">{opt.value}</span>
+                            <span className="text-xs text-muted-foreground ml-auto">
+                              {opt.value}
+                            </span>
                           </label>
                         ))}
                     </div>

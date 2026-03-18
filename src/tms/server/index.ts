@@ -231,10 +231,21 @@ async function initTMS() {
       .map((l: string) => l.trim())
       .filter((l: string) => l.length > 0);
 
+  const videoTranslationType =
+    fileConfig.video?.translationType ||
+    (process.env.VIDEO_TRANSLATION_TYPE as 'aiDubbing' | 'subtitle') ||
+    'aiDubbing';
+
   tms = new TranslationManagementSystem({
     projectRoot: PROJECT_ROOT,
     sourceLanguage,
     targetLanguages,
+
+    video: {
+      translationType: (VALID_VIDEO_TYPES.includes(videoTranslationType)
+        ? videoTranslationType
+        : 'aiDubbing') as 'aiDubbing' | 'subtitle',
+    },
 
     ollang: {
       apiKey,
@@ -280,6 +291,7 @@ app.get('/api/config', async (req, res) => {
     projectRoot: config.projectRoot,
     sourceLanguage: config.sourceLanguage,
     targetLanguages: config.targetLanguages,
+    videoTranslationType: config.video?.translationType ?? 'aiDubbing',
     hasApiKey: !!config.ollang.apiKey,
     hasProjectId: !!config.ollang.projectId,
   });
@@ -749,7 +761,34 @@ app.post('/api/translate', async (req, res) => {
             logger.debug(`Found folderId: ${folderId} for folder: ${folderName}`);
           }
         } catch (folderError: any) {
-          logger.warn('Could not get folders');
+          logger.warn('Could not get folders from localhost, trying backend');
+        }
+        // Fallback: fetch folders from Ollang backend /scans/folders
+        if (!folderId) {
+          try {
+            const config = tms.getConfig();
+            const baseUrl = (config.ollang.baseUrl || '').replace(/\/$/, '');
+            const apiKey = process.env.OLLANG_API_KEY;
+            if (baseUrl && apiKey) {
+              const response = await fetch(`${baseUrl}/scans/folders`, {
+                method: 'GET',
+                headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey },
+              });
+              if (response.ok) {
+                const data = await response.json();
+                const folders = Array.isArray(data) ? data : data.folders || [];
+                const targetFolder = folders.find((f: any) => f.name === folderName);
+                if (targetFolder?.id) {
+                  folderId = targetFolder.id;
+                  logger.debug(
+                    `Found folderId: ${folderId} for folder: ${folderName} (from backend)`
+                  );
+                }
+              }
+            }
+          } catch (backendErr: any) {
+            logger.warn(`Could not get folders from backend: ${backendErr}`);
+          }
         }
 
         const scans = await sdk.scans.listScans();
@@ -957,15 +996,26 @@ app.post('/api/translate', async (req, res) => {
             try {
               const videoData = (item as any)._videoData;
               if (videoData) {
-                const orderId = await tms.translateVideo(videoData, primaryLang, level || 0);
-                logger.debug(`Video translation order created: ${orderId}`);
+                const dubbedVideoUrl = await tms.translateVideo(
+                  videoData,
+                  primaryLang,
+                  level || 0,
+                  folderName,
+                  folderId
+                );
+                logger.debug(`Video translation completed, dubbed URL: ${dubbedVideoUrl}`);
 
                 const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
                 if (textIndex !== -1) {
+                  const existing = folderState.texts[textIndex] as any;
+                  const statusByLanguage = { ...(existing.statusByLanguage || {}) };
+                  statusByLanguage[primaryLang] = 'translated';
+
                   folderState.texts[textIndex] = {
                     ...folderState.texts[textIndex],
                     status: 'translated',
-                    translations: { [targetLanguage]: `Order: ${orderId}` },
+                    translations: { [primaryLang]: dubbedVideoUrl },
+                    statusByLanguage,
                   };
                 }
               }

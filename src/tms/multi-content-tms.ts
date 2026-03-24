@@ -301,14 +301,15 @@ export class MultiContentTMS {
     return this.ollangClient.orders.get(orderId);
   }
 
-  async waitForCompletion(orderId: string, maxWaitSeconds: number = 600): Promise<any> {
-    const maxAttempts = maxWaitSeconds / 5;
+  async waitForCompletion(orderId: string, maxWaitSeconds: number = 1200): Promise<any> {
+    const maxAttempts = Math.floor(maxWaitSeconds / 5); // 20 min default
     let attempts = 0;
 
-    logger.debug(`Waiting for order ${orderId} to complete...`);
+    logger.debug(`Waiting for order ${orderId} to complete... (max ${maxWaitSeconds}s)`);
 
     while (attempts < maxAttempts) {
       const order = await this.ollangClient.orders.get(orderId);
+      logger.debug(`Order ${orderId} poll #${attempts + 1}/${maxAttempts}: status=${order.status}`);
 
       if (order.status === 'completed') {
         logger.debug(`Order ${orderId} completed`);
@@ -323,7 +324,7 @@ export class MultiContentTMS {
       attempts++;
     }
 
-    throw new Error(`Order ${orderId} timed out after ${maxWaitSeconds} seconds`);
+    throw new Error(`Order ${orderId} timed out after ${maxWaitSeconds} seconds (20 min)`);
   }
 
   getSDK(): Ollang {

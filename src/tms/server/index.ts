@@ -113,6 +113,28 @@ function getOrCreateFolderState(folderName?: string | null): FolderState {
   return state;
 }
 
+function mergeKeyForScanItem(t: any): string | null {
+  try {
+    if (t.type === 'hardcoded' && t.source?.file != null && typeof t.text === 'string') {
+      return `hardcoded::${t.source.file}::${t.source.line}::${t.text}`;
+    }
+    if (
+      t.category === 'video' &&
+      typeof t.text === 'string' &&
+      t.text.startsWith('http') &&
+      t.source?.file
+    ) {
+      return `videoUrl::${t.source.file}::${t.text}`;
+    }
+    if (t.category === 'image' && t.source?.file && typeof t.text === 'string') {
+      return `image::${t.source.file}::${t.text}`;
+    }
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
 async function updateCurrentScan(folderName?: string) {
   const state = getOrCreateFolderState(folderName);
   const { currentScanId, texts, videos, images, audios } = state;
@@ -610,13 +632,29 @@ app.post('/api/scan', async (req, res) => {
 
         if (latestScanData && latestScanData.texts && folderState.currentScanId) {
           const previousTextsMap = new Map(latestScanData.texts.map((t: any) => [t.id, t]));
+          const previousByMergeKey = new Map<string, any>();
+          for (const prev of latestScanData.texts) {
+            const k = mergeKeyForScanItem(prev);
+            if (k) previousByMergeKey.set(k, prev);
+          }
 
           folderState.texts = folderState.texts.map((t) => {
-            const previousText = previousTextsMap.get(t.id) as any;
-            if (previousText && previousText.status) {
+            let previousText = previousTextsMap.get(t.id) as any;
+            if (!previousText) {
+              const k = mergeKeyForScanItem(t);
+              if (k) previousText = previousByMergeKey.get(k);
+            }
+
+            const hasPrevTranslations =
+              previousText?.translations && Object.keys(previousText.translations).length > 0;
+            const prevStatus = previousText?.status;
+            const shouldMerge =
+              previousText && (hasPrevTranslations || (prevStatus && prevStatus !== 'scanned'));
+
+            if (shouldMerge) {
               return {
                 ...t,
-                status: previousText.status,
+                status: previousText.status || t.status,
                 translations: previousText.translations || {},
                 statusByLanguage:
                   previousText.statusByLanguage || (t as any).statusByLanguage || {},

@@ -63,6 +63,11 @@ export class HardcodedDetector {
 
     const jsxTextRegex = />([^<>{}\n]+)</g;
 
+    const ollangAppliedJsxRegex = new RegExp(
+      '>\\{\\s*"((?:[^"\\\\]|\\\\.)*)"\\s*\\/\\*\\s*-\\s*"[^"]*"\\s*\\([a-z]{2}\\)\\s*\\*\\/',
+      'g'
+    );
+
     lines.forEach((lineContent, lineIndex) => {
       const trimmedLine = lineContent.trim();
       if (
@@ -75,9 +80,38 @@ export class HardcodedDetector {
       }
 
       let match;
-      const regex = new RegExp(jsxTextRegex);
-      while ((match = regex.exec(lineContent)) !== null) {
+      const plainRegex = new RegExp(jsxTextRegex);
+      while ((match = plainRegex.exec(lineContent)) !== null) {
         const text = match[1].trim();
+
+        if (this.isValidText(text)) {
+          texts.push({
+            id: `hardcoded-${filePath}-${lineIndex}-${match.index}`,
+            text,
+            type: 'hardcoded',
+            source: {
+              file: filePath,
+              line: lineIndex + 1,
+              column: match.index,
+              context: lineContent.trim(),
+            },
+            selected: false,
+            status: 'scanned',
+          });
+        }
+      }
+
+      const ollangLineRegex = new RegExp(ollangAppliedJsxRegex.source, 'g');
+      while ((match = ollangLineRegex.exec(lineContent)) !== null) {
+        const raw = match[1];
+        let text: string;
+        try {
+          const jsonFragment = '"' + raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+          text = JSON.parse(jsonFragment) as string;
+        } catch {
+          text = raw.replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+        }
+        text = text.trim();
 
         if (this.isValidText(text)) {
           texts.push({

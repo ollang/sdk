@@ -345,7 +345,7 @@ function App() {
     setTimeout(() => {
       clearInterval(pollInterval);
       setIsTranslating(false);
-    }, 300000);
+    }, 1200000); // 20 min timeout
   };
 
   const handleTranslateSelected = async () => {
@@ -398,7 +398,16 @@ function App() {
       return;
     }
 
-    const translated = texts.filter((t) => t.selected && t.status === 'translated');
+    const hasTranslatedForDisplay = (t: TranslatableText) =>
+      targetLanguages.some(
+        (lang) =>
+          (t.statusByLanguage || {})[lang] === 'translated' ||
+          (t.statusByLanguage || {})[lang] === 'submitted' ||
+          !!(t.translations || {})[lang]
+      );
+    const translated = texts
+      .filter((t) => (t as any).folderName === selectedFolderFilter)
+      .filter((t) => t.selected && hasTranslatedForDisplay(t));
     if (translated.length === 0) return;
 
     const isCms = !!folders.find((f) => f.name === selectedFolderFilter)?.isCms;
@@ -418,8 +427,10 @@ function App() {
     const isCms = !!folders.find((f) => f.name === selectedFolderFilter)?.isCms;
 
     try {
-      const languagesToApply = targetLanguages.filter((lang) =>
-        translated.some((t) => (t.statusByLanguage || {})[lang] === 'translated')
+      const languagesToApply = targetLanguages.filter(
+        (lang) =>
+          translated.some((t) => (t.statusByLanguage || {})[lang] === 'translated') ||
+          translated.some((t) => !!(t.translations || {})[lang])
       );
 
       for (const lang of languagesToApply) {
@@ -445,23 +456,21 @@ function App() {
           continue;
         }
 
-        const updatedTexts = texts.map((t) => {
-          if (t.selected && t.status === 'translated') {
+        const appliedIds = new Set(translated.map((t) => t.id));
+        setTexts((prev) =>
+          prev.map((t) => {
+            if (!appliedIds.has(t.id)) return t;
             const statusByLanguage = {
               ...(t.statusByLanguage || {}),
               [lang]: 'submitted' as const,
             };
             return {
               ...t,
-              status: 'submitted' as const,
               statusByLanguage,
               selected: false,
             };
-          }
-          return t;
-        });
-
-        setTexts(updatedTexts);
+          })
+        );
       }
     } catch (error) {
     } finally {
@@ -527,21 +536,27 @@ function App() {
               .filter((t) => (t as any).folderName === selectedFolderFilter)
               .map((t) => {
                 const byLang = (t as any).statusByLanguage || {};
-                const primaryLang = targetLanguages[0];
-                const langStatus = primaryLang ? byLang[primaryLang] : undefined;
+                const translations = t.translations || {};
+
+                const hasTranslating = targetLanguages.some(
+                  (lang) => byLang[lang] === 'translating'
+                );
+                const langsWithTranslation = targetLanguages.filter(
+                  (lang) => !!(translations as Record<string, string | undefined>)[lang]
+                );
+                const hasPendingApply = langsWithTranslation.some(
+                  (lang) => byLang[lang] !== 'submitted'
+                );
+                const allSubmitted =
+                  langsWithTranslation.length > 0 &&
+                  langsWithTranslation.every((lang) => byLang[lang] === 'submitted');
 
                 let status: TranslatableText['status'];
-                if (
-                  langStatus === 'translating' ||
-                  langStatus === 'translated' ||
-                  langStatus === 'submitted'
-                ) {
-                  status = langStatus;
-                } else if (primaryLang && t.translations && t.translations[primaryLang]) {
-                  status = 'translated';
-                } else {
-                  status = 'scanned';
-                }
+                if (hasTranslating) status = 'translating';
+                else if (hasPendingApply) status = 'translated';
+                else if (allSubmitted) status = 'submitted';
+                else if (langsWithTranslation.length > 0) status = 'translated';
+                else status = 'scanned';
 
                 return { ...t, status };
               })}

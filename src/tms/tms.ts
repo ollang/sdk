@@ -158,98 +158,252 @@ export class TranslationManagementSystem {
     const fs = require('fs').promises;
     const path = require('path');
 
-    let changedCount = 0;
-    let submittedCount = 0;
-
     for (const text of this.state.texts) {
-      if (!text.id.startsWith('i18n-')) continue;
-
-      const statusByLanguage = (text as any).statusByLanguage || {};
-      const langStatus = statusByLanguage[targetLanguage];
-
-      const isSubmittedGlobal = text.status === 'submitted';
-      const isSubmittedLang = langStatus === 'submitted';
-
-      if (!isSubmittedGlobal && !isSubmittedLang) continue;
-
-      const hasTranslationForThisLanguage = text.translations && text.translations[targetLanguage];
-
-      if (!hasTranslationForThisLanguage) {
-        continue;
+      if (text.id.startsWith('i18n-')) {
+        await this.syncI18nTextWithCodebase(text, targetLanguage, fs, path);
+      } else if (text.id.startsWith('video-')) {
+        await this.syncVideoTextWithCodebase(text, targetLanguage, fs, path);
+      } else if (text.id.startsWith('hardcoded-')) {
+        await this.syncHardcodedTextWithCodebase(text, targetLanguage, fs, path);
+      } else if (text.id.startsWith('image-')) {
+        await this.syncImageTextWithCodebase(text, targetLanguage, fs, path);
       }
+    }
+  }
 
-      submittedCount++;
+  private async syncI18nTextWithCodebase(
+    text: TextItem,
+    targetLanguage: string,
+    fs: typeof import('fs/promises'),
+    path: typeof import('path')
+  ): Promise<void> {
+    const statusByLanguage = (text as any).statusByLanguage || {};
+    const langStatus = statusByLanguage[targetLanguage];
 
-      try {
-        const withoutPrefix = text.id.substring(5);
-        const jsonIndex = withoutPrefix.indexOf('.json');
+    const isSubmittedGlobal = text.status === 'submitted';
+    const isSubmittedLang = langStatus === 'submitted';
 
-        if (jsonIndex > 0) {
-          const afterJson = withoutPrefix.substring(jsonIndex + 5);
+    if (!isSubmittedGlobal && !isSubmittedLang) return;
 
-          if (afterJson.startsWith('-')) {
-            const sourceFilePath = withoutPrefix.substring(0, jsonIndex + 5);
-            const key = afterJson.substring(1);
+    const hasTranslationForThisLanguage = text.translations && text.translations[targetLanguage];
 
-            const targetFilePath = sourceFilePath.replace(
-              `/${this.config.sourceLanguage}.json`,
-              `/${targetLanguage}.json`
-            );
+    if (!hasTranslationForThisLanguage) {
+      return;
+    }
 
-            let existsInCodebase = false;
+    try {
+      const withoutPrefix = text.id.substring(5);
+      const jsonIndex = withoutPrefix.indexOf('.json');
 
-            try {
-              const content = await fs.readFile(targetFilePath, 'utf-8');
-              const targetData = JSON.parse(content);
+      if (jsonIndex > 0) {
+        const afterJson = withoutPrefix.substring(jsonIndex + 5);
 
-              const keys = key.split('.');
-              let current = targetData;
+        if (afterJson.startsWith('-')) {
+          const sourceFilePath = withoutPrefix.substring(0, jsonIndex + 5);
+          const key = afterJson.substring(1);
 
-              for (const k of keys) {
-                if (current && typeof current === 'object' && k in current) {
-                  current = current[k];
-                } else {
-                  current = null;
-                  break;
-                }
+          const targetFilePath = sourceFilePath.replace(
+            `/${this.config.sourceLanguage}.json`,
+            `/${targetLanguage}.json`
+          );
+
+          let existsInCodebase = false;
+
+          try {
+            const content = await fs.readFile(targetFilePath, 'utf-8');
+            const targetData = JSON.parse(content);
+
+            const keys = key.split('.');
+            let current = targetData;
+
+            for (const k of keys) {
+              if (current && typeof current === 'object' && k in current) {
+                current = current[k];
+              } else {
+                current = null;
+                break;
               }
-
-              if (current && typeof current === 'string') {
-                existsInCodebase = true;
-              }
-            } catch (error) {
-              // File doesn't exist or can't be read
             }
 
-            const hasTranslation =
-              this.state.translations.has(text.id) ||
-              (text.translations && text.translations[targetLanguage]);
+            if (current && typeof current === 'string') {
+              existsInCodebase = true;
+            }
+          } catch (error) {
+            // File doesn't exist or can't be read
+          }
 
-            if (!existsInCodebase && hasTranslation) {
-              text.status = 'translated';
-              if (!(text as any).statusByLanguage) {
-                (text as any).statusByLanguage = {};
-              }
-              (text as any).statusByLanguage[targetLanguage] = 'translated';
-              changedCount++;
-            } else if (existsInCodebase && hasTranslation) {
-              if (text.status !== 'submitted') {
-                text.status = 'submitted';
-                changedCount++;
-              }
-              if (!(text as any).statusByLanguage) {
-                (text as any).statusByLanguage = {};
-              }
-              if ((text as any).statusByLanguage[targetLanguage] !== 'submitted') {
-                (text as any).statusByLanguage[targetLanguage] = 'submitted';
-                changedCount++;
-              }
+          const hasTranslation =
+            this.state.translations.has(text.id) ||
+            (text.translations && text.translations[targetLanguage]);
+
+          if (!existsInCodebase && hasTranslation) {
+            text.status = 'translated';
+            if (!(text as any).statusByLanguage) {
+              (text as any).statusByLanguage = {};
+            }
+            (text as any).statusByLanguage[targetLanguage] = 'translated';
+          } else if (existsInCodebase && hasTranslation) {
+            if (text.status !== 'submitted') {
+              text.status = 'submitted';
+            }
+            if (!(text as any).statusByLanguage) {
+              (text as any).statusByLanguage = {};
+            }
+            if ((text as any).statusByLanguage[targetLanguage] !== 'submitted') {
+              (text as any).statusByLanguage[targetLanguage] = 'submitted';
             }
           }
         }
-      } catch (error) {
-        logger.error(`Error syncing ${text.id}`, error);
       }
+    } catch (error) {
+      logger.error(`Error syncing ${text.id}`, error);
+    }
+  }
+
+  private async syncVideoTextWithCodebase(
+    text: TextItem,
+    targetLanguage: string,
+    fs: typeof import('fs/promises'),
+    path: typeof import('path')
+  ): Promise<void> {
+    const statusByLanguage = (text as any).statusByLanguage || {};
+    const langStatus = statusByLanguage[targetLanguage];
+    const isSubmittedGlobal = text.status === 'submitted';
+    const isSubmittedLang = langStatus === 'submitted';
+    if (!isSubmittedGlobal && !isSubmittedLang) return;
+
+    const translated = text.translations?.[targetLanguage];
+    if (!translated) return;
+
+    const videoItem = text as any;
+    const sourceFile = videoItem.source?.file || videoItem._videoData?.path;
+    const originalUrl = videoItem.text || videoItem._videoData?.url;
+    if (!sourceFile || !originalUrl) return;
+
+    const absolutePath = path.resolve(this.config.projectRoot, sourceFile);
+    if (
+      !absolutePath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
+      absolutePath !== path.resolve(this.config.projectRoot)
+    ) {
+      return;
+    }
+
+    try {
+      const content = await fs.readFile(absolutePath, 'utf-8');
+      const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escapedLang = targetLanguage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const appliedInFile = new RegExp(
+        `"${escapedUrl}"\\s*/\\*\\s*-\\s*"[^"]*"\\s*\\(${escapedLang}\\)\\s*\\*/`
+      ).test(content);
+
+      if (!appliedInFile) {
+        text.status = 'translated';
+        if (!(text as any).statusByLanguage) {
+          (text as any).statusByLanguage = {};
+        }
+        (text as any).statusByLanguage[targetLanguage] = 'translated';
+      }
+    } catch (error) {
+      logger.error(`Error syncing video ${text.id}`, error);
+    }
+  }
+
+  private async syncHardcodedTextWithCodebase(
+    text: TextItem,
+    targetLanguage: string,
+    fs: typeof import('fs/promises'),
+    path: typeof import('path')
+  ): Promise<void> {
+    const statusByLanguage = (text as any).statusByLanguage || {};
+    const langStatus = statusByLanguage[targetLanguage];
+    const isSubmittedGlobal = text.status === 'submitted';
+    const isSubmittedLang = langStatus === 'submitted';
+    if (!isSubmittedGlobal && !isSubmittedLang) return;
+
+    const translated = text.translations?.[targetLanguage];
+    if (!translated || !text.source?.file) return;
+
+    const absolutePath = path.resolve(this.config.projectRoot, text.source.file);
+    if (
+      !absolutePath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
+      absolutePath !== path.resolve(this.config.projectRoot)
+    ) {
+      return;
+    }
+
+    try {
+      const fileContent = await fs.readFile(absolutePath, 'utf-8');
+      const lines = fileContent.split('\n');
+      const lineIdx = text.source.line - 1;
+      if (lineIdx < 0 || lineIdx >= lines.length) return;
+
+      const line = lines[lineIdx];
+      const originalText = text.text;
+      const appliedInFile =
+        line.includes(JSON.stringify(originalText)) &&
+        line.includes('/* -') &&
+        line.includes(`(${targetLanguage})`);
+
+      if (!appliedInFile) {
+        text.status = 'translated';
+        if (!(text as any).statusByLanguage) {
+          (text as any).statusByLanguage = {};
+        }
+        (text as any).statusByLanguage[targetLanguage] = 'translated';
+      }
+    } catch (error) {
+      logger.error(`Error syncing hardcoded ${text.id}`, error);
+    }
+  }
+
+  private async syncImageTextWithCodebase(
+    text: TextItem,
+    targetLanguage: string,
+    fs: typeof import('fs/promises'),
+    path: typeof import('path')
+  ): Promise<void> {
+    const statusByLanguage = (text as any).statusByLanguage || {};
+    const langStatus = statusByLanguage[targetLanguage];
+    const isSubmittedGlobal = text.status === 'submitted';
+    const isSubmittedLang = langStatus === 'submitted';
+    if (!isSubmittedGlobal && !isSubmittedLang) return;
+
+    const translated = text.translations?.[targetLanguage];
+    if (!translated) return;
+
+    const imageItem = text as any;
+    const isUrl = imageItem._imageData?.metadata?.isUrl || /^https?:\/\//.test(text.text || '');
+    if (!isUrl) return;
+
+    const sourceFile = imageItem.source?.file || imageItem._imageData?.path;
+    const originalUrl = text.text || imageItem._imageData?.url;
+    if (!sourceFile || !originalUrl) return;
+
+    const absolutePath = path.resolve(this.config.projectRoot, sourceFile);
+    if (
+      !absolutePath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
+      absolutePath !== path.resolve(this.config.projectRoot)
+    ) {
+      return;
+    }
+
+    try {
+      const content = await fs.readFile(absolutePath, 'utf-8');
+      const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const escapedLang = targetLanguage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const appliedInFile = new RegExp(
+        `"${escapedUrl}"\\s*/\\*\\s*-\\s*"[^"]*"\\s*\\(${escapedLang}\\)\\s*\\*/`
+      ).test(content);
+
+      if (!appliedInFile) {
+        text.status = 'translated';
+        if (!(text as any).statusByLanguage) {
+          (text as any).statusByLanguage = {};
+        }
+        (text as any).statusByLanguage[targetLanguage] = 'translated';
+      }
+    } catch (error) {
+      logger.error(`Error syncing image ${text.id}`, error);
     }
   }
 
@@ -382,9 +536,10 @@ export class TranslationManagementSystem {
       logger.debug(`Getting folderId for folder: ${params.folderName}`);
       try {
         const client = this.ollangClient.getClient();
-        const folders = await client.get<Array<{ id: string; name: string; projectId?: string }>>(
-          '/scans/folders'
-        );
+        const folders =
+          await client.get<Array<{ id: string; name: string; projectId?: string }>>(
+            '/scans/folders'
+          );
 
         const targetFolder = folders.find((f) => f.name === params.folderName);
 
@@ -447,11 +602,12 @@ export class TranslationManagementSystem {
   }
 
   private async pollOrderStatus(orderId: string): Promise<void> {
-    const maxAttempts = 120;
+    const maxAttempts = 240;
     let attempts = 0;
 
     while (attempts < maxAttempts) {
       const order = await this.ollangClient.orders.get(orderId);
+      logger.debug(`Order ${orderId} poll #${attempts + 1}/${maxAttempts}: status=${order.status}`);
 
       if (order.status === 'completed') {
         await this.extractTranslations(order);
@@ -475,7 +631,7 @@ export class TranslationManagementSystem {
       attempts++;
     }
 
-    throw new Error(`Order ${orderId} timed out after ${maxAttempts * 5} seconds`);
+    throw new Error(`Order ${orderId} timed out after ${maxAttempts * 5} seconds (20 min)`);
   }
 
   private async extractTranslations(order: any): Promise<void> {
@@ -720,8 +876,10 @@ export class TranslationManagementSystem {
 
               // Path traversal protection
               const absoluteFilePath = path.resolve(this.config.projectRoot, filePath);
-              if (!absoluteFilePath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
-                  absoluteFilePath !== path.resolve(this.config.projectRoot)) {
+              if (
+                !absoluteFilePath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
+                absoluteFilePath !== path.resolve(this.config.projectRoot)
+              ) {
                 logger.warn(`Skipping path outside project root: ${filePath}`);
                 continue;
               }
@@ -752,8 +910,10 @@ export class TranslationManagementSystem {
           );
 
           const absoluteTargetPath = path.resolve(this.config.projectRoot, targetFilePath);
-          if (!absoluteTargetPath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
-              absoluteTargetPath !== path.resolve(this.config.projectRoot)) {
+          if (
+            !absoluteTargetPath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
+            absoluteTargetPath !== path.resolve(this.config.projectRoot)
+          ) {
             logger.warn(`Skipping target path outside project root: ${targetFilePath}`);
             continue;
           }
@@ -812,9 +972,11 @@ export class TranslationManagementSystem {
             const sourceFile = this.findSourceFileForUrl(imageId);
 
             if (sourceFile) {
-              await this.replaceUrlInFile(
-                sourceFile,
+              const absolutePath = path.resolve(this.config.projectRoot, sourceFile);
+              await this.addVideoUrlToLocaleMap(
+                absolutePath,
                 translation.originalPath,
+                targetLanguage,
                 translation.translatedPath
               );
 
@@ -831,6 +993,90 @@ export class TranslationManagementSystem {
               updatedFiles++;
             }
           }
+        }
+      }
+
+      for (const [textId, translation] of translationsToApply) {
+        if (!textId.startsWith('hardcoded-')) continue;
+
+        const hardItem = this.state.texts.find((t) => t.id === textId);
+        if (!hardItem || hardItem.type !== 'hardcoded' || !hardItem.source?.file) continue;
+
+        try {
+          await this.applyHardcodedInFile(hardItem, translation.translatedText, targetLanguage);
+          updatedFiles++;
+          logger.debug(`Applied hardcoded translation for ${textId}`);
+        } catch (err) {
+          logger.error(`Failed to apply hardcoded translation for ${textId}`, err);
+        }
+      }
+
+      for (const [textId, translation] of translationsToApply) {
+        if (!textId.startsWith('image-')) continue;
+
+        const imageItem = this.state.texts.find((t) => t.id === textId) as any;
+        if (!imageItem?._imageData) continue;
+
+        const isUrl = imageItem._imageData.metadata?.isUrl || /^https?:\/\//.test(imageItem.text);
+        if (!isUrl) continue;
+
+        const sourceFile = imageItem.source?.file || imageItem._imageData?.path;
+        const originalUrl = imageItem.text || imageItem._imageData?.url;
+        if (!sourceFile || !originalUrl) continue;
+
+        const absolutePath = path.resolve(this.config.projectRoot, sourceFile);
+        if (
+          !absolutePath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
+          absolutePath !== path.resolve(this.config.projectRoot)
+        ) {
+          logger.warn(`Skipping image path outside project root: ${sourceFile}`);
+          continue;
+        }
+
+        try {
+          await this.addVideoUrlToLocaleMap(
+            absolutePath,
+            originalUrl,
+            targetLanguage,
+            translation.translatedText
+          );
+          updatedFiles++;
+          logger.debug(`Applied image URL translation for ${targetLanguage} in ${sourceFile}`);
+        } catch (err) {
+          logger.error(`Failed to apply image URL translation in ${sourceFile}`, err);
+        }
+      }
+
+      for (const [textId, translation] of translationsToApply) {
+        if (!textId.startsWith('video-')) continue;
+
+        const videoItem = this.state.texts.find((t) => t.id === textId) as any;
+        if (!videoItem?._videoData) continue;
+
+        const sourceFile = videoItem.source?.file || videoItem._videoData?.path;
+        const originalUrl = videoItem.text || videoItem._videoData?.url;
+        if (!sourceFile || !originalUrl) continue;
+
+        const absolutePath = path.resolve(this.config.projectRoot, sourceFile);
+        if (
+          !absolutePath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
+          absolutePath !== path.resolve(this.config.projectRoot)
+        ) {
+          logger.warn(`Skipping video path outside project root: ${sourceFile}`);
+          continue;
+        }
+
+        try {
+          await this.addVideoUrlToLocaleMap(
+            absolutePath,
+            originalUrl,
+            targetLanguage,
+            translation.translatedText
+          );
+          updatedFiles++;
+          logger.debug(`Applied video translation for ${targetLanguage} in ${sourceFile}`);
+        } catch (err) {
+          logger.error(`Failed to apply video translation in ${sourceFile}`, err);
         }
       }
 
@@ -872,13 +1118,98 @@ export class TranslationManagementSystem {
       const escapedOldUrl = oldUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
       const regex = new RegExp(`"${escapedOldUrl}"`, 'g');
-      content = content.replace(regex, `"${oldUrl}","${newUrl}"`);
+      content = content.replace(regex, `"${newUrl}"`);
 
       await fs.writeFile(filePath, content, 'utf-8');
     } catch (error) {
       logger.error(`Error replacing URL in ${filePath}`, error);
       throw error;
     }
+  }
+
+  private async addVideoUrlToLocaleMap(
+    filePath: string,
+    originalUrl: string,
+    targetLanguage: string,
+    translatedUrl: string
+  ): Promise<void> {
+    const fs = require('fs').promises;
+
+    let content = await fs.readFile(filePath, 'utf-8');
+    const escapedUrl = originalUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+    const escapedLang = targetLanguage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const existingAppendRegex = new RegExp(
+      `"${escapedUrl}"\\s*/\\*\\s*-\\s*"[^"]*"\\s*\\(${escapedLang}\\)\\s*\\*/`,
+      'g'
+    );
+    if (existingAppendRegex.test(content)) {
+      content = content.replace(
+        new RegExp(
+          `("${escapedUrl}"\\s*/\\*\\s*-)\\s*"[^"]*"(\\s*\\(${escapedLang}\\)\\s*\\*/)`,
+          'g'
+        ),
+        `$1 "${translatedUrl}"$2`
+      );
+    } else {
+      const replacement = `"${originalUrl}" /* - "${translatedUrl}" (${targetLanguage}) */`;
+      const urlRegex = new RegExp(`"${escapedUrl}"`, 'g');
+      content = content.replace(urlRegex, replacement);
+    }
+
+    if (!content.includes(translatedUrl)) {
+      throw new Error(`Could not find video URL in ${filePath}`);
+    }
+
+    await fs.writeFile(filePath, content, 'utf-8');
+  }
+
+  private async applyHardcodedInFile(
+    item: TextItem,
+    translatedText: string,
+    targetLanguage: string
+  ): Promise<void> {
+    const fs = require('fs').promises;
+    const path = require('path');
+    const absolutePath = path.resolve(this.config.projectRoot, item.source.file);
+    if (
+      !absolutePath.startsWith(path.resolve(this.config.projectRoot) + path.sep) &&
+      absolutePath !== path.resolve(this.config.projectRoot)
+    ) {
+      throw new Error('Invalid path');
+    }
+
+    const content = await fs.readFile(absolutePath, 'utf-8');
+    const lines = content.split('\n');
+    const lineIdx = item.source.line - 1;
+    if (lineIdx < 0 || lineIdx >= lines.length) {
+      throw new Error('Invalid line');
+    }
+
+    let line = lines[lineIdx];
+    const originalText = item.text;
+    const plainNeedle = `>${originalText}<`;
+    const inner = `{${JSON.stringify(originalText)} /* - ${JSON.stringify(translatedText)} (${targetLanguage}) */}`;
+    const bracedReplacement = `>${inner}<`;
+
+    if (line.includes(plainNeedle)) {
+      lines[lineIdx] = line.replace(plainNeedle, bracedReplacement);
+    } else {
+      const startSearch = `>{${JSON.stringify(originalText)} /* - "`;
+      const startIdx = line.indexOf(startSearch);
+      if (startIdx !== -1) {
+        const closeIdx = line.indexOf('}<', startIdx);
+        if (closeIdx !== -1) {
+          lines[lineIdx] = line.slice(0, startIdx) + `>${inner}<` + line.slice(closeIdx + 2);
+        } else {
+          throw new Error('Invalid hardcoded JSX closing');
+        }
+      } else {
+        throw new Error('Could not find hardcoded text to update');
+      }
+    }
+
+    await fs.writeFile(absolutePath, lines.join('\n'), 'utf-8');
   }
 
   async scanVideos(): Promise<VideoContent[]> {
@@ -945,9 +1276,10 @@ export class TranslationManagementSystem {
     if (!videoFolderId && folderName) {
       try {
         const client = this.ollangClient.getClient();
-        const folders = await client.get<Array<{ id: string; name: string; projectId?: string }>>(
-          '/scans/folders'
-        );
+        const folders =
+          await client.get<Array<{ id: string; name: string; projectId?: string }>>(
+            '/scans/folders'
+          );
         const targetFolder = folders.find((f) => f.name === folderName);
         if (targetFolder?.id) {
           videoFolderId = targetFolder.id;
@@ -972,7 +1304,7 @@ export class TranslationManagementSystem {
       const uploadParams: Record<string, unknown> = {
         url: video.url,
         originalname: filename,
-        size: (video.metadata?.size && video.metadata.size > 0) ? video.metadata.size : 1,
+        size: video.metadata?.size && video.metadata.size > 0 ? video.metadata.size : 1,
         sourceLanguage: this.config.sourceLanguage,
       };
       if (videoFolderId) {
@@ -1039,11 +1371,14 @@ export class TranslationManagementSystem {
   }
 
   private async pollVideoOrderStatus(orderId: string): Promise<any> {
-    const maxAttempts = 120;
+    const maxAttempts = 240; // 20 min at 5s interval
     let attempts = 0;
 
     while (attempts < maxAttempts) {
       const order = await this.ollangClient.orders.get(orderId);
+      logger.debug(
+        `Video order ${orderId} poll #${attempts + 1}/${maxAttempts}: status=${order.status}`
+      );
 
       if (order.status === 'completed') {
         return order;
@@ -1057,7 +1392,7 @@ export class TranslationManagementSystem {
       attempts++;
     }
 
-    throw new Error(`Video order ${orderId} timed out after ${maxAttempts * 5} seconds`);
+    throw new Error(`Video order ${orderId} timed out after ${maxAttempts * 5} seconds (20 min)`);
   }
 
   private async pollUntilVideoOutput(
@@ -1071,11 +1406,16 @@ export class TranslationManagementSystem {
 
     while (retries <= maxRetries) {
       const url = await this.extractVideoOutput(currentOrder, videoOrderType);
+      logger.debug(
+        `Video output poll for order ${orderId} (${retries + 1}/${maxRetries + 1}): ${url ? 'found' : 'not yet'}`
+      );
       if (url) {
         return url;
       }
       if (retries < maxRetries) {
-        logger.debug(`Video URL not yet available for order ${orderId}, retrying in 15s (${retries + 1}/${maxRetries})`);
+        logger.debug(
+          `Video URL not yet available for order ${orderId}, retrying in 15s (${retries + 1}/${maxRetries})`
+        );
         await new Promise((resolve) => setTimeout(resolve, 15000));
         currentOrder = await this.ollangClient.orders.get(orderId);
         retries++;
@@ -1098,7 +1438,8 @@ export class TranslationManagementSystem {
       }
     }
 
-    let documents = order?.documents || order?.targetDocuments || order?.orderDocs || order?.docs || [];
+    let documents =
+      order?.documents || order?.targetDocuments || order?.orderDocs || order?.docs || [];
 
     if (!Array.isArray(documents) && order?.document) {
       documents = [order.document];

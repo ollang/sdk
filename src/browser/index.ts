@@ -1469,15 +1469,6 @@ export class OllangBrowser {
         </div>
         <button id="ollang-push-tms" class="ollang-btn ollang-btn-primary">Push to Ollang</button>
       </div>
-      <div id="ollang-strapi-schema-block" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e2e8f0;">
-        <span style="font-size: 11px; font-weight: 500; color: #64748b;">Strapi schema (optional)</span>
-        <p style="margin: 4px 0 8px 0; font-size: 11px; color: #94a3b8;">Fetch schema here so Push uses Content-Type Builder fields. Use your Strapi API token (not the Ollang API token).</p>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          <input type="text" id="ollang-strapi-url" placeholder="Strapi URL (e.g. https://api.example.com)" style="width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; box-sizing: border-box;" />
-          <input type="password" id="ollang-strapi-jwt" placeholder="Strapi Admin JWT token" style="width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; box-sizing: border-box;" />
-          <button id="ollang-fetch-schema" class="ollang-btn-sm">Fetch schema</button>
-        </div>
-      </div>
     `;
 
     const selectionInfo = document.createElement('div');
@@ -1544,13 +1535,6 @@ export class OllangBrowser {
       document
         .getElementById('ollang-push-tms')
         ?.addEventListener('click', () => this.pushToOllang());
-      document
-        .getElementById('ollang-fetch-schema')
-        ?.addEventListener('click', () => this.fetchStrapiSchemaInPanel());
-      const strapiUrlInput = document.getElementById('ollang-strapi-url') as HTMLInputElement;
-      if (strapiUrlInput && !strapiUrlInput.value) {
-        strapiUrlInput.value = this.config.strapiUrl || [...this.detectedStrapiUrls][0] || '';
-      }
 
       this.updateFolderOptions();
       const dropdown = document.getElementById('ollang-folder-dropdown');
@@ -2225,43 +2209,6 @@ export class OllangBrowser {
     container.appendChild(cancelBtn);
     parent.parentElement?.insertBefore(container, parent.nextSibling);
     setTimeout(() => input.focus(), 0);
-  }
-
-  private async fetchStrapiSchemaInPanel(): Promise<void> {
-    const baseUrl = (this.config.baseUrl || '').replace(/\/$/, '');
-    if (!baseUrl) {
-      this.showStatus('Missing Ollang baseUrl', 'error');
-      return;
-    }
-    const urlInput = document.getElementById('ollang-strapi-url') as HTMLInputElement;
-    const jwtInput = document.getElementById('ollang-strapi-jwt') as HTMLInputElement;
-    const btn = document.getElementById('ollang-fetch-schema') as HTMLButtonElement;
-    const strapiUrl = urlInput?.value?.trim();
-    const strapiToken = jwtInput?.value?.trim();
-    if (!strapiUrl || !strapiToken) {
-      this.showStatus('Enter Strapi URL and Strapi API token', 'error');
-      return;
-    }
-    if (btn) btn.disabled = true;
-    this.showStatus('Fetching Strapi schema...', 'info');
-    try {
-      const res = await fetch(`${baseUrl}/api/strapi-schema`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ strapiUrl, strapiToken }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (res.ok && data.success) {
-        const n = data.contentTypes?.length ?? 0;
-        this.showStatus(`Schema loaded: ${n} content-type(s)`, 'success');
-      } else {
-        this.showStatus(data.error || `Failed (${res.status})`, 'error');
-      }
-    } catch (e) {
-      this.showStatus('Network error: ' + (e instanceof Error ? e.message : String(e)), 'error');
-    } finally {
-      if (btn) btn.disabled = false;
-    }
   }
 
   private async pushToOllang(): Promise<void> {

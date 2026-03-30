@@ -427,6 +427,27 @@ export class OllangBrowser {
     return !!(single?.attributes?.url && single?.attributes?.mime);
   }
 
+  private normalizeMediaUrl(url: string): string {
+    let u = String(url).trim();
+    u = u.replace(/^(https?:\/\/[^/]+)\/{2,}/i, '$1/');
+    return u;
+  }
+
+  private joinStrapiMediaUrl(strapiBase: string, rawUrl: string): string {
+    const trimmed = rawUrl.trim();
+    if (/^https?:\/\//i.test(trimmed)) {
+      return this.normalizeMediaUrl(trimmed);
+    }
+    const base = strapiBase.replace(/\/+$/, '');
+    let path = trimmed;
+    if (path.startsWith('//')) {
+      path = `/${path.replace(/^\/+/, '')}`;
+    } else if (path.length > 0 && !path.startsWith('/')) {
+      path = `/${path}`;
+    }
+    return this.normalizeMediaUrl(`${base}${path}`);
+  }
+
   private extractStrapiMedia(
     mediaObj: any,
     contentType: string,
@@ -447,7 +468,7 @@ export class OllangBrowser {
       const isVideo = mime.startsWith('video/') || /\.(mp4|webm|ogg|mov)(\?|$)/i.test(rawUrl);
       if (!isImage && !isVideo) continue;
 
-      const absoluteUrl = rawUrl.startsWith('http') ? rawUrl : `${strapiBase}${rawUrl}`;
+      const absoluteUrl = this.joinStrapiMediaUrl(strapiBase, rawUrl);
 
       const meta: StrapiMediaMeta = {
         contentType,
@@ -460,7 +481,7 @@ export class OllangBrowser {
 
       this.strapiMediaMap.set(absoluteUrl, meta);
 
-      if (!rawUrl.startsWith('http')) {
+      if (!/^https?:\/\//i.test(rawUrl.trim())) {
         this.strapiMediaMap.set(rawUrl, meta);
       }
     }
@@ -1292,7 +1313,8 @@ export class OllangBrowser {
       this.extractTextsFromObject(texts);
     }
     const added = this.i18nTexts.size - before;
-    if (this.config.debug) console.log(`✅ Added ${added} new i18n texts (total: ${this.i18nTexts.size})`);
+    if (this.config.debug)
+      console.log(`✅ Added ${added} new i18n texts (total: ${this.i18nTexts.size})`);
     if (added > 0 && this.capturedContent.size > 0) {
       this.clear();
       this.scanPage();

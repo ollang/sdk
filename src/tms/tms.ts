@@ -161,11 +161,11 @@ export class TranslationManagementSystem {
     for (const text of this.state.texts) {
       if (text.id.startsWith('i18n-')) {
         await this.syncI18nTextWithCodebase(text, targetLanguage, fs, path);
-      } else if (text.id.startsWith('video-')) {
+      } else if ((text as any)._videoData) {
         await this.syncVideoTextWithCodebase(text, targetLanguage, fs, path);
       } else if (text.id.startsWith('hardcoded-')) {
         await this.syncHardcodedTextWithCodebase(text, targetLanguage, fs, path);
-      } else if (text.id.startsWith('image-')) {
+      } else if ((text as any)._imageData) {
         await this.syncImageTextWithCodebase(text, targetLanguage, fs, path);
       }
     }
@@ -1012,8 +1012,6 @@ export class TranslationManagementSystem {
       }
 
       for (const [textId, translation] of translationsToApply) {
-        if (!textId.startsWith('image-')) continue;
-
         const imageItem = this.state.texts.find((t) => t.id === textId) as any;
         if (!imageItem?._imageData) continue;
 
@@ -1048,8 +1046,6 @@ export class TranslationManagementSystem {
       }
 
       for (const [textId, translation] of translationsToApply) {
-        if (!textId.startsWith('video-')) continue;
-
         const videoItem = this.state.texts.find((t) => t.id === textId) as any;
         if (!videoItem?._videoData) continue;
 

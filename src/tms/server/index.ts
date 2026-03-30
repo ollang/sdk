@@ -114,6 +114,19 @@ function getOrCreateFolderState(folderName?: string | null): FolderState {
   return state;
 }
 
+function matchesTextId(item: TextItem, requestedId: string): boolean {
+  if (item.id === requestedId) return true;
+  if (item.category === 'image') {
+    if (item.id === `image-${requestedId}`) return true;
+    if (requestedId === `image-${item.id}`) return true;
+  }
+  if (item.category === 'video') {
+    if (item.id === `video-${requestedId}`) return true;
+    if (requestedId === `video-${item.id}`) return true;
+  }
+  return false;
+}
+
 function normalizeCmsMediaImageUrl(raw: string): string {
   let u = String(raw).trim();
   u = u.replace(/^(https?:\/\/[^/]+)\/{2,}/i, '$1/');
@@ -176,7 +189,7 @@ function cmsMediaRowsToVideoTextItems(media: any[] | undefined): TextItem[] {
     };
 
     out.push({
-      id: `video-${rawId}`,
+      id: rawId,
       text: url,
       type: 'cms',
       source: m.source || { file: '', line: 0, column: 0, context: 'CMS media video' },
@@ -245,7 +258,7 @@ function cmsMediaRowsToImageTextItems(media: any[] | undefined): TextItem[] {
     };
 
     out.push({
-      id: `image-${rawId}`,
+      id: rawId,
       text: url,
       type: 'cms',
       source: m.source || { file: '', line: 0, column: 0, context: 'CMS media image' },
@@ -1151,8 +1164,9 @@ app.post('/api/translate', async (req, res) => {
     }
 
     // Items are already grouped by entry (each entry = one item with cmsFields).
-    // Direct lookup by textIds is sufficient.
-    const selectedItems = folderState.texts.filter((t) => textIds.includes(t.id));
+    const selectedItems = folderState.texts.filter((t) =>
+      textIds.some((rid) => matchesTextId(t, rid))
+    );
 
     if (selectedItems.length === 0) {
       logger.debug(`No items found. Requested IDs: ${textIds.slice(0, 3).join(', ')}...`);
@@ -1191,7 +1205,7 @@ app.post('/api/translate', async (req, res) => {
 
     // Update all items to 'translating' status immediately (per language)
     textIds.forEach((textId: string) => {
-      const textIndex = folderState.texts.findIndex((t) => t.id === textId);
+      const textIndex = folderState.texts.findIndex((t) => matchesTextId(t, textId));
       if (textIndex !== -1) {
         const existing: any = folderState.texts[textIndex];
         const statusByLanguage = { ...(existing.statusByLanguage || {}) };
@@ -1530,7 +1544,8 @@ app.post('/api/apply', async (req, res) => {
     (tms as any)['state'].translations.clear();
 
     const translatedTexts = folderState.texts.filter((t) => {
-      const hasRequestedId = !textIds || textIds.length === 0 || textIds.includes(t.id);
+      const hasRequestedId =
+        !textIds || textIds.length === 0 || textIds.some((rid: string) => matchesTextId(t, rid));
       const hasTargetLangTranslation = !!t.translations && !!t.translations[targetLanguage];
       return hasRequestedId && hasTargetLangTranslation;
     });
@@ -1666,7 +1681,7 @@ app.post('/api/apply', async (req, res) => {
     );
 
     for (const textId of appliedTextIds) {
-      const textIndex = folderState.texts.findIndex((t) => t.id === textId);
+      const textIndex = folderState.texts.findIndex((t) => matchesTextId(t, textId));
       if (textIndex === -1) continue;
 
       const item: any = folderState.texts[textIndex];

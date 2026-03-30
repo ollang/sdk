@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { TranslationManagementSystem } from '../tms.js';
+import { VideoContent } from '../detector/content-type-detector.js';
 import { TextItem } from '../types.js';
 import { autoDetectI18nDirs } from '../detector/auto-detect.js';
 import { StrapiPusher, StrapiPushResult, StrapiTranslationItem } from './strapi-pusher.js';
@@ -113,6 +114,25 @@ function getOrCreateFolderState(folderName?: string | null): FolderState {
   return state;
 }
 
+function matchesTextId(item: TextItem, requestedId: string): boolean {
+  if (item.id === requestedId) return true;
+  if (item.category === 'image') {
+    if (item.id === `image-${requestedId}`) return true;
+    if (requestedId === `image-${item.id}`) return true;
+  }
+  if (item.category === 'video') {
+    if (item.id === `video-${requestedId}`) return true;
+    if (requestedId === `video-${item.id}`) return true;
+  }
+  return false;
+}
+
+function normalizeCmsMediaImageUrl(raw: string): string {
+  let u = String(raw).trim();
+  u = u.replace(/^(https?:\/\/[^/]+)\/{2,}/i, '$1/');
+  return u;
+}
+
 function mergeKeyForScanItem(t: any): string | null {
   try {
     if (t.type === 'hardcoded' && t.source?.file != null && typeof t.text === 'string') {
@@ -127,12 +147,262 @@ function mergeKeyForScanItem(t: any): string | null {
       return `videoUrl::${t.source.file}::${t.text}`;
     }
     if (t.category === 'image' && t.source?.file && typeof t.text === 'string') {
-      return `image::${t.source.file}::${t.text}`;
+      return `image::${t.source.file}::${normalizeCmsMediaImageUrl(t.text)}`;
     }
   } catch {
     // ignore
   }
   return null;
+}
+
+function cmsMediaRowsToVideoTextItems(media: any[] | undefined): TextItem[] {
+  if (!Array.isArray(media)) return [];
+  const out: TextItem[] = [];
+  for (const m of media) {
+    if (!m?.mediaUrl || m.mediaType !== 'video') continue;
+
+    const rawId =
+      m.id ||
+      `cms-media-vid-${m.metadata?.strapiEntryId ?? 'x'}-${m.metadata?.strapiField ?? 'video'}`;
+    const url = normalizeCmsMediaImageUrl(m.mediaUrl);
+    const tail = url.split('/').pop() || 'video.mp4';
+
+    const videoContent: VideoContent = {
+      id: rawId,
+      type: 'video',
+      path: '',
+      url,
+      filename: tail,
+      line: m.source?.line,
+      column: m.source?.column,
+      metadata: {
+        duration: typeof m.metadata?.duration === 'number' ? m.metadata.duration : 0,
+        format: tail.includes('.')
+          ? tail.replace(/^.*\./, '').replace(/\?.*$/, '') || 'mp4'
+          : 'mp4',
+        hasSubtitles: Boolean(m.metadata?.hasSubtitles),
+        subtitlePath: m.metadata?.subtitlePath,
+        size: typeof m.size === 'number' ? m.size : 0,
+        isUrl: true,
+        sourceFile: m.source?.file,
+      },
+    };
+
+    out.push({
+      id: rawId,
+      text: url,
+      type: 'cms',
+      source: m.source || { file: '', line: 0, column: 0, context: 'CMS media video' },
+      selected: !!m.selected,
+      status: (m.status as TextItem['status']) || 'scanned',
+      category: 'video',
+      tags: ['video', 'cms-media'],
+      strapiContentType: m.metadata?.strapiContentType,
+      strapiEntryId: m.metadata?.strapiEntryId,
+      strapiField: m.metadata?.strapiField ?? m.metadata?.cmsField,
+      strapiRoute: m.metadata?.strapiRoute,
+      cmsId: m.metadata?.cmsId,
+      _videoData: videoContent,
+    } as TextItem);
+  }
+  return out;
+}
+
+function cmsMediaRowsToVideoContents(media: any[] | undefined): VideoContent[] {
+  const items = cmsMediaRowsToVideoTextItems(media);
+  return items.map((t) => (t as any)._videoData as VideoContent).filter(Boolean);
+}
+
+function dedupeVideosByUrl(videos: VideoContent[]): VideoContent[] {
+  const seen = new Set<string>();
+  const out: VideoContent[] = [];
+  for (const v of videos) {
+    const key = (v.url || v.path || v.id).split('?')[0];
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
+  }
+  return out;
+}
+
+function cmsMediaRowsToImageTextItems(media: any[] | undefined): TextItem[] {
+  if (!Array.isArray(media)) return [];
+  const out: TextItem[] = [];
+  for (const m of media) {
+    if (!m?.mediaUrl || m.mediaType !== 'image') continue;
+
+    const rawId =
+      m.id || `cms-media-${m.metadata?.strapiEntryId ?? 'x'}-${m.metadata?.strapiField ?? 'img'}`;
+    const url = normalizeCmsMediaImageUrl(m.mediaUrl);
+    const tail = url.split('/').pop() || 'image.png';
+    const ext = tail.includes('.')
+      ? tail.replace(/^.*\./, '').replace(/[^a-z0-9]/gi, '') || 'png'
+      : 'png';
+
+    const imageContent = {
+      id: rawId,
+      type: 'image' as const,
+      path: '',
+      url,
+      filename: tail,
+      line: m.source?.line,
+      column: m.source?.column,
+      metadata: {
+        hasText: Boolean(m.alt),
+        detectedText: m.alt ? [String(m.alt)] : undefined,
+        format: ext,
+        size: typeof m.size === 'number' ? m.size : 0,
+        isUrl: true,
+        sourceFile: m.source?.file,
+      },
+    };
+
+    out.push({
+      id: rawId,
+      text: url,
+      type: 'cms',
+      source: m.source || { file: '', line: 0, column: 0, context: 'CMS media image' },
+      selected: !!m.selected,
+      status: (m.status as TextItem['status']) || 'scanned',
+      category: 'image',
+      tags: ['image', 'cms-media'],
+      strapiContentType: m.metadata?.strapiContentType,
+      strapiEntryId: m.metadata?.strapiEntryId,
+      strapiField: m.metadata?.strapiField ?? m.metadata?.cmsField,
+      strapiRoute: m.metadata?.strapiRoute,
+      cmsId: m.metadata?.cmsId,
+      _imageData: imageContent,
+    } as TextItem);
+  }
+  return out;
+}
+
+function mergeStandaloneScanVideosIntoTexts(
+  texts: TextItem[],
+  videos: any[] | undefined
+): TextItem[] {
+  if (!Array.isArray(videos) || videos.length === 0) return texts;
+  const base = [...texts];
+  const ids = new Set(base.map((t) => t.id));
+  const existingUrls = new Set(
+    base
+      .filter(
+        (t: any) =>
+          t.category === 'video' && typeof t.text === 'string' && t.text.startsWith('http')
+      )
+      .map((t: any) => normalizeCmsMediaImageUrl(t.text))
+  );
+
+  for (const video of videos) {
+    if (!video?.id) continue;
+    const tid = `video-${video.id}`;
+    if (ids.has(tid)) continue;
+    const url =
+      typeof video.url === 'string' && video.url.startsWith('http')
+        ? video.url
+        : typeof video.filename === 'string' && video.filename.startsWith('http')
+          ? video.filename
+          : '';
+    const label = url || video.filename || 'Unknown video';
+    if (url && existingUrls.has(normalizeCmsMediaImageUrl(url))) {
+      continue;
+    }
+
+    const vdata: VideoContent = {
+      ...video,
+      id: video.id,
+      type: 'video',
+      path: video.path || '',
+      url: video.url || (video.filename?.startsWith('http') ? video.filename : undefined),
+      metadata: {
+        duration: video.metadata?.duration ?? 0,
+        format: video.metadata?.format || 'mp4',
+        hasSubtitles: Boolean(video.metadata?.hasSubtitles),
+        subtitlePath: video.metadata?.subtitlePath,
+        size: video.metadata?.size ?? 0,
+        isUrl: Boolean(
+          video.metadata?.isUrl ?? (video.url || video.filename || '').startsWith?.('http')
+        ),
+        sourceFile: video.metadata?.sourceFile ?? video.path,
+      },
+    };
+
+    base.push({
+      id: tid,
+      text: label,
+      type: 'cms',
+      source: {
+        file: video.path || '',
+        line: video.line || 0,
+        column: video.column || 0,
+        context: 'Scan / CMS video',
+      },
+      selected: false,
+      status: 'scanned',
+      category: 'video',
+      tags: ['video'],
+      _videoData: vdata,
+    } as TextItem);
+    ids.add(tid);
+    if (url) existingUrls.add(normalizeCmsMediaImageUrl(url));
+  }
+  return base;
+}
+
+function mergeScanTextsWithCmsMedia(
+  texts: TextItem[] | undefined,
+  media: any[] | undefined
+): TextItem[] {
+  let base = Array.isArray(texts) ? [...texts] : [];
+
+  const videoAdds = cmsMediaRowsToVideoTextItems(media);
+  const existingIds = new Set(base.map((t) => t.id));
+  const existingVideoUrls = new Set(
+    base
+      .filter(
+        (t: any) =>
+          t.category === 'video' && typeof t.text === 'string' && t.text.startsWith('http')
+      )
+      .map((t: any) => normalizeCmsMediaImageUrl(String(t.text || '')))
+  );
+  for (const item of videoAdds) {
+    if (existingIds.has(item.id)) continue;
+    const u = normalizeCmsMediaImageUrl(String(item.text || ''));
+    if (u && existingVideoUrls.has(u)) continue;
+    base.push(item);
+    existingIds.add(item.id);
+    if (u) existingVideoUrls.add(u);
+  }
+
+  const imageAdds = cmsMediaRowsToImageTextItems(media);
+  const existingImageUrls = new Set(
+    base
+      .filter((t: any) => t.category === 'image')
+      .map((t: any) => normalizeCmsMediaImageUrl(String(t.text || '')))
+  );
+  for (const item of imageAdds) {
+    if (existingIds.has(item.id)) continue;
+    const u = normalizeCmsMediaImageUrl(String(item.text || ''));
+    if (u && existingImageUrls.has(u)) continue;
+    base.push(item);
+    existingIds.add(item.id);
+    if (u) existingImageUrls.add(u);
+  }
+
+  return base;
+}
+
+function applyScanDataToFolderState(folderState: FolderState, scanData: any): void {
+  let texts = mergeScanTextsWithCmsMedia(scanData?.texts, scanData?.media);
+  texts = mergeStandaloneScanVideosIntoTexts(texts, scanData?.videos);
+  folderState.texts = texts;
+  const fromScan = Array.isArray(scanData?.videos) ? scanData.videos : [];
+  const fromMedia = cmsMediaRowsToVideoContents(scanData?.media);
+  folderState.videos = dedupeVideosByUrl([
+    ...fromScan,
+    ...fromMedia,
+    ...(folderState.videos || []),
+  ]);
 }
 
 async function updateCurrentScan(folderName?: string) {
@@ -683,8 +953,25 @@ app.post('/api/scan', async (req, res) => {
             return t;
           });
 
+          if (latestScanData?.media?.length) {
+            folderState.texts = mergeScanTextsWithCmsMedia(folderState.texts, latestScanData.media);
+          }
+
+          let existingScanDoc: Record<string, unknown> = {};
+          try {
+            const existingRecord = await sdk.scans.getScan(folderState.currentScanId);
+            existingScanDoc =
+              typeof existingRecord.scanData === 'string'
+                ? JSON.parse(existingRecord.scanData)
+                : existingRecord.scanData || {};
+          } catch {
+            existingScanDoc =
+              latestScanData && typeof latestScanData === 'object' ? { ...latestScanData } : {};
+          }
+
           await sdk.scans.updateScan(folderState.currentScanId, {
             scanData: {
+              ...existingScanDoc,
               texts: folderState.texts,
               videos: folderState.videos,
               images: folderState.images,
@@ -701,8 +988,13 @@ app.post('/api/scan', async (req, res) => {
         } else {
           folderState.texts = folderState.texts.map((t) => ({ ...t, status: 'scanned' }));
 
+          if (latestScanData?.media?.length) {
+            folderState.texts = mergeScanTextsWithCmsMedia(folderState.texts, latestScanData.media);
+          }
+
           const createdScan = await sdk.scans.createScan({
             scanData: {
+              ...(latestScanData && typeof latestScanData === 'object' ? latestScanData : {}),
               texts: folderState.texts,
               videos: folderState.videos,
               images: folderState.images,
@@ -846,8 +1138,8 @@ app.post('/api/translate', async (req, res) => {
               ? JSON.parse(latestScan.scanData)
               : latestScan.scanData;
 
-          if (scanData.texts) {
-            folderState.texts = scanData.texts;
+          if (scanData.texts || scanData.media || scanData.videos) {
+            applyScanDataToFolderState(folderState, scanData);
             logger.debug(`Loaded ${folderState.texts.length} items from folder ${folderName}`);
           }
         }
@@ -860,8 +1152,8 @@ app.post('/api/translate', async (req, res) => {
         const scan = await sdk.scans.getScan(folderState.currentScanId);
         const scanData =
           typeof scan.scanData === 'string' ? JSON.parse(scan.scanData) : scan.scanData;
-        if (scanData.texts) {
-          folderState.texts = scanData.texts;
+        if (scanData.texts || scanData.media || scanData.videos) {
+          applyScanDataToFolderState(folderState, scanData);
           logger.debug(
             `Reloaded ${folderState.texts.length} items from scan ${folderState.currentScanId}`
           );
@@ -872,8 +1164,9 @@ app.post('/api/translate', async (req, res) => {
     }
 
     // Items are already grouped by entry (each entry = one item with cmsFields).
-    // Direct lookup by textIds is sufficient.
-    const selectedItems = folderState.texts.filter((t) => textIds.includes(t.id));
+    const selectedItems = folderState.texts.filter((t) =>
+      textIds.some((rid) => matchesTextId(t, rid))
+    );
 
     if (selectedItems.length === 0) {
       logger.debug(`No items found. Requested IDs: ${textIds.slice(0, 3).join(', ')}...`);
@@ -912,7 +1205,7 @@ app.post('/api/translate', async (req, res) => {
 
     // Update all items to 'translating' status immediately (per language)
     textIds.forEach((textId: string) => {
-      const textIndex = folderState.texts.findIndex((t) => t.id === textId);
+      const textIndex = folderState.texts.findIndex((t) => matchesTextId(t, textId));
       if (textIndex !== -1) {
         const existing: any = folderState.texts[textIndex];
         const statusByLanguage = { ...(existing.statusByLanguage || {}) };
@@ -1029,104 +1322,145 @@ app.post('/api/translate', async (req, res) => {
         }
 
         if (videoItems.length > 0) {
-          logger.debug(`Translating ${videoItems.length} videos to ${primaryLang}...`);
-          for (const item of videoItems) {
-            try {
-              const videoData = (item as any)._videoData;
-              if (videoData) {
-                const dubbedVideoUrl = await tms.translateVideo(
-                  videoData,
-                  primaryLang,
-                  level || 0,
-                  folderName,
-                  folderId
-                );
-                logger.debug(`Video translation completed, dubbed URL: ${dubbedVideoUrl}`);
+          for (const lang of languages) {
+            logger.debug(`Translating ${videoItems.length} videos to ${lang}...`);
+            for (const item of videoItems) {
+              try {
+                const videoData = (item as any)._videoData;
+                if (videoData) {
+                  const dubbedVideoUrl = await tms.translateVideo(
+                    { ...videoData },
+                    lang,
+                    level || 0,
+                    folderName,
+                    folderId
+                  );
+                  logger.debug(`Video translation completed (${lang}), URL: ${dubbedVideoUrl}`);
 
+                  const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
+                  if (textIndex !== -1) {
+                    const existing = folderState.texts[textIndex] as any;
+                    const statusByLanguage = { ...(existing.statusByLanguage || {}) };
+                    statusByLanguage[lang] = 'translated';
+                    const translations = {
+                      ...(existing.translations || {}),
+                      [lang]: dubbedVideoUrl,
+                    };
+
+                    folderState.texts[textIndex] = {
+                      ...existing,
+                      status: 'translated',
+                      translations,
+                      statusByLanguage,
+                    };
+                  }
+                }
+              } catch (error: any) {
+                logger.error(`Video translation error for ${item.id} (${lang})`, error);
                 const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
                 if (textIndex !== -1) {
-                  const existing = folderState.texts[textIndex] as any;
-                  const statusByLanguage = { ...(existing.statusByLanguage || {}) };
-                  statusByLanguage[primaryLang] = 'translated';
-
+                  const cur = folderState.texts[textIndex] as any;
+                  const statusByLanguage = { ...(cur.statusByLanguage || {}) };
+                  statusByLanguage[lang] = 'none';
                   folderState.texts[textIndex] = {
-                    ...folderState.texts[textIndex],
-                    status: 'translated',
-                    translations: { [primaryLang]: dubbedVideoUrl },
+                    ...cur,
                     statusByLanguage,
                   };
                 }
-              }
-            } catch (error: any) {
-              logger.error(`Video translation error for ${item.id}`, error);
-              const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
-              if (textIndex !== -1) {
-                folderState.texts[textIndex] = {
-                  ...folderState.texts[textIndex],
-                  status: 'scanned',
-                };
               }
             }
           }
         }
 
         if (imageItems.length > 0) {
-          logger.debug(`Translating ${imageItems.length} images to ${primaryLang}...`);
-          for (const item of imageItems) {
-            try {
-              const imageData = (item as any)._imageData;
-              if (imageData) {
-                imageData.textItemId = item.id;
-                const orderId = await tms.translateImage(imageData, primaryLang, level || 0);
-                logger.debug(`Image translation order created: ${orderId}`);
+          for (const lang of languages) {
+            logger.debug(`Translating ${imageItems.length} images to ${lang}...`);
+            for (const item of imageItems) {
+              try {
+                const raw = (item as any)._imageData;
+                if (raw) {
+                  const imageData = { ...raw, textItemId: item.id };
+                  const imageResult = await tms.translateImage(
+                    imageData,
+                    lang,
+                    level || 0,
+                    folderName,
+                    folderId
+                  );
+                  logger.debug(`Image translation finished (${lang}): ${imageResult}`);
 
+                  const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
+                  if (textIndex !== -1) {
+                    const existing = folderState.texts[textIndex] as any;
+                    const statusByLanguage = { ...(existing.statusByLanguage || {}) };
+                    statusByLanguage[lang] = 'translated';
+                    const translations = {
+                      ...(existing.translations || {}),
+                      [lang]: imageResult,
+                    };
+
+                    folderState.texts[textIndex] = {
+                      ...existing,
+                      status: 'translated',
+                      translations,
+                      statusByLanguage,
+                    };
+                  }
+                }
+              } catch (error: any) {
+                logger.error(`Image translation error for ${item.id} (${lang})`, error);
                 const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
                 if (textIndex !== -1) {
+                  const cur = folderState.texts[textIndex] as any;
+                  const statusByLanguage = { ...(cur.statusByLanguage || {}) };
+                  statusByLanguage[lang] = 'none';
                   folderState.texts[textIndex] = {
-                    ...folderState.texts[textIndex],
-                    status: 'translated',
-                    translations: { [targetLanguage]: `Order: ${orderId}` },
+                    ...cur,
+                    statusByLanguage,
                   };
                 }
-              }
-            } catch (error: any) {
-              logger.error(`Image translation error for ${item.id}`, error);
-              const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
-              if (textIndex !== -1) {
-                folderState.texts[textIndex] = {
-                  ...folderState.texts[textIndex],
-                  status: 'scanned',
-                };
               }
             }
           }
         }
 
         if (audioItems.length > 0) {
-          logger.debug(`Translating ${audioItems.length} audios to ${primaryLang}...`);
-          for (const item of audioItems) {
-            try {
-              const audioData = (item as any)._audioData;
-              if (audioData) {
-                const orderId = await tms.translateAudio(audioData, primaryLang, level || 0);
+          for (const lang of languages) {
+            logger.debug(`Translating ${audioItems.length} audios to ${lang}...`);
+            for (const item of audioItems) {
+              try {
+                const audioData = (item as any)._audioData;
+                if (audioData) {
+                  const orderId = await tms.translateAudio(audioData, lang, level || 0);
 
+                  const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
+                  if (textIndex !== -1) {
+                    const existing = folderState.texts[textIndex] as any;
+                    const statusByLanguage = { ...(existing.statusByLanguage || {}) };
+                    statusByLanguage[lang] = 'translated';
+                    folderState.texts[textIndex] = {
+                      ...existing,
+                      status: 'translated',
+                      translations: {
+                        ...(existing.translations || {}),
+                        [lang]: `Order: ${orderId}`,
+                      },
+                      statusByLanguage,
+                    };
+                  }
+                }
+              } catch (error: any) {
+                logger.error(`Audio translation error for ${item.id} (${lang})`, error);
                 const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
                 if (textIndex !== -1) {
+                  const cur = folderState.texts[textIndex] as any;
+                  const statusByLanguage = { ...(cur.statusByLanguage || {}) };
+                  statusByLanguage[lang] = 'none';
                   folderState.texts[textIndex] = {
-                    ...folderState.texts[textIndex],
-                    status: 'translated',
-                    translations: { [targetLanguage]: `Order: ${orderId}` },
+                    ...cur,
+                    statusByLanguage,
                   };
                 }
-              }
-            } catch (error: any) {
-              logger.error(`Audio translation error for ${item.id}`, error);
-              const textIndex = folderState.texts.findIndex((t) => t.id === item.id);
-              if (textIndex !== -1) {
-                folderState.texts[textIndex] = {
-                  ...folderState.texts[textIndex],
-                  status: 'scanned',
-                };
               }
             }
           }
@@ -1198,8 +1532,8 @@ app.post('/api/apply', async (req, res) => {
               ? JSON.parse(latestScan.scanData)
               : latestScan.scanData;
 
-          if (scanData.texts) {
-            folderState.texts = scanData.texts;
+          if (scanData.texts || scanData.media || scanData.videos) {
+            applyScanDataToFolderState(folderState, scanData);
           }
         }
       } catch (error: any) {
@@ -1210,7 +1544,8 @@ app.post('/api/apply', async (req, res) => {
     (tms as any)['state'].translations.clear();
 
     const translatedTexts = folderState.texts.filter((t) => {
-      const hasRequestedId = !textIds || textIds.length === 0 || textIds.includes(t.id);
+      const hasRequestedId =
+        !textIds || textIds.length === 0 || textIds.some((rid: string) => matchesTextId(t, rid));
       const hasTargetLangTranslation = !!t.translations && !!t.translations[targetLanguage];
       return hasRequestedId && hasTargetLangTranslation;
     });
@@ -1346,7 +1681,7 @@ app.post('/api/apply', async (req, res) => {
     );
 
     for (const textId of appliedTextIds) {
-      const textIndex = folderState.texts.findIndex((t) => t.id === textId);
+      const textIndex = folderState.texts.findIndex((t) => matchesTextId(t, textId));
       if (textIndex === -1) continue;
 
       const item: any = folderState.texts[textIndex];
@@ -1667,11 +2002,8 @@ app.get('/api/scans/:scanId', async (req, res) => {
     const folderState = getOrCreateFolderState(scanData.folderName);
     folderState.currentScanId = scan.id;
 
-    if (scanData.texts) {
-      folderState.texts = scanData.texts;
-    }
-    if (scanData.videos) {
-      folderState.videos = scanData.videos;
+    if (scanData.texts || scanData.media || scanData.videos) {
+      applyScanDataToFolderState(folderState, scanData);
     }
     if (scanData.images) {
       folderState.images = scanData.images;

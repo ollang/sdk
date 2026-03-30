@@ -191,20 +191,51 @@ export class MultiContentTMS {
     }
 
     const image = images[0];
+    const isUrl = image.metadata?.isUrl || !!(image.url && !image.path);
 
-    const FormData = require('form-data');
-    const fs = require('fs');
-    const formData = new FormData();
+    const getFilenameFromUrl = (url: string): string => {
+      const urlWithoutQuery = url.split('?')[0];
+      const parts = urlWithoutQuery.split('/');
+      return parts[parts.length - 1] || 'image.png';
+    };
 
-    formData.append('file', fs.createReadStream(image.path));
-    formData.append('name', `Image-Translation-${Date.now()}`);
-    formData.append('sourceLanguage', this.config.sourceLanguage);
+    const ensureImageFileNameForPipeline = (name: string): string => {
+      const lower = name.toLowerCase();
+      if (/\.(jpe?g|png)$/.test(lower)) {
+        return name;
+      }
+      const base = name.replace(/\.[^/.]+$/, '');
+      return `${base || 'image'}.png`;
+    };
 
-    const uploadResponse = await this.ollangClient
-      .getClient()
-      .uploadFile<{ projectId: string }>('/integration/upload/direct', formData);
+    let projectId: string;
 
-    const projectId = uploadResponse.projectId;
+    if (isUrl && image.url) {
+      let filename = ensureImageFileNameForPipeline(getFilenameFromUrl(image.url));
+      const uploadResponse = await this.ollangClient
+        .getClient()
+        .post<{ projectId: string }>('/integration/upload/direct-url', {
+          url: image.url,
+          originalname: filename,
+          size: image.metadata?.size && image.metadata.size > 0 ? image.metadata.size : 1,
+          sourceLanguage: this.config.sourceLanguage,
+        });
+      projectId = uploadResponse.projectId;
+    } else {
+      const FormData = require('form-data');
+      const fs = require('fs');
+      const formData = new FormData();
+
+      formData.append('file', fs.createReadStream(image.path));
+      formData.append('name', `Image-Translation-${Date.now()}`);
+      formData.append('sourceLanguage', this.config.sourceLanguage);
+
+      const uploadResponse = await this.ollangClient
+        .getClient()
+        .uploadFile<{ projectId: string }>('/integration/upload/direct', formData);
+
+      projectId = uploadResponse.projectId;
+    }
 
     const orderParams: CreateOrderParams = {
       orderType: 'document',

@@ -161,11 +161,11 @@ export class TranslationManagementSystem {
     for (const text of this.state.texts) {
       if (text.id.startsWith('i18n-')) {
         await this.syncI18nTextWithCodebase(text, targetLanguage, fs, path);
-      } else if (text.id.startsWith('video-')) {
+      } else if ((text as any)._videoData) {
         await this.syncVideoTextWithCodebase(text, targetLanguage, fs, path);
       } else if (text.id.startsWith('hardcoded-')) {
         await this.syncHardcodedTextWithCodebase(text, targetLanguage, fs, path);
-      } else if (text.id.startsWith('image-')) {
+      } else if ((text as any)._imageData) {
         await this.syncImageTextWithCodebase(text, targetLanguage, fs, path);
       }
     }
@@ -1012,8 +1012,6 @@ export class TranslationManagementSystem {
       }
 
       for (const [textId, translation] of translationsToApply) {
-        if (!textId.startsWith('image-')) continue;
-
         const imageItem = this.state.texts.find((t) => t.id === textId) as any;
         if (!imageItem?._imageData) continue;
 
@@ -1048,8 +1046,6 @@ export class TranslationManagementSystem {
       }
 
       for (const [textId, translation] of translationsToApply) {
-        if (!textId.startsWith('video-')) continue;
-
         const videoItem = this.state.texts.find((t) => t.id === textId) as any;
         if (!videoItem?._videoData) continue;
 
@@ -1395,6 +1391,120 @@ export class TranslationManagementSystem {
     throw new Error(`Video order ${orderId} timed out after ${maxAttempts * 5} seconds (20 min)`);
   }
 
+  private async pollImageDocumentOrder(orderId: string): Promise<any> {
+    const maxAttempts = 240;
+    let attempts = 0;
+
+    while (attempts < maxAttempts) {
+      const order = await this.ollangClient.orders.get(orderId);
+      logger.debug(
+        `Image document order ${orderId} poll #${attempts + 1}/${maxAttempts}: status=${order.status}`
+      );
+
+      if (order.status === 'completed') {
+        return order;
+      }
+
+      if (order.status === 'failed' || order.status === 'cancelled') {
+        throw new Error(`Image document order ${orderId} ${order.status}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      attempts++;
+    }
+
+    throw new Error(
+      `Image document order ${orderId} timed out after ${maxAttempts * 5} seconds (20 min)`
+    );
+  }
+
+  private async pollUntilImageOutput(orderId: string, order: any): Promise<string | null> {
+    let currentOrder = order;
+    const maxRetries = 8;
+    let retries = 0;
+
+    while (retries <= maxRetries) {
+      const url = await this.extractTranslatedImageUrl(currentOrder);
+      logger.debug(
+        `Image output poll for order ${orderId} (${retries + 1}/${maxRetries + 1}): ${url ? 'found' : 'not yet'}`
+      );
+      if (url) {
+        return url;
+      }
+      if (retries < maxRetries) {
+        logger.debug(
+          `Translated image URL not yet available for order ${orderId}, retrying in 15s (${retries + 1}/${maxRetries})`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 15000));
+        currentOrder = await this.ollangClient.orders.get(orderId);
+        retries++;
+      } else {
+        break;
+      }
+    }
+    return null;
+  }
+
+  /** Resolves final image URL from a completed document (image-translation) order. */
+  private async extractTranslatedImageUrl(order: any): Promise<string | null> {
+    let documents =
+      order?.documents || order?.targetDocuments || order?.orderDocs || order?.docs || [];
+
+    if (!Array.isArray(documents) && order?.document) {
+      documents = [order.document];
+    }
+
+    const isTranslatedImageDoc = (d: any): boolean => {
+      const t = String(d?.type ?? '').toLowerCase();
+      return t === 'translated_image' || t.endsWith('translated_image');
+    };
+
+    const isLikelyImageAssetName = (name: unknown): boolean =>
+      typeof name === 'string' && /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(name);
+
+    if (documents.length > 0) {
+      const doc =
+        documents.find(isTranslatedImageDoc) ||
+        documents.find(
+          (d: any) => d?.type === 'translator_document' && isLikelyImageAssetName(d?.name)
+        ) ||
+        documents.find((d: any) => isLikelyImageAssetName(d?.name));
+      const url = doc?.url ?? doc?.targetDocumentUrl ?? doc?.documentUrl;
+      if (url && typeof url === 'string') {
+        logger.debug(`Found translated image URL on order: ${url}`);
+        return url;
+      }
+    }
+
+    if (order?.projectId) {
+      try {
+        const project = await this.ollangClient.projects.get(order.projectId);
+        const targetDocs =
+          (project as any)?.targetDocuments ||
+          (project as any)?.docs ||
+          (project as any)?.projectDocs ||
+          [];
+        const doc =
+          (Array.isArray(targetDocs) ? targetDocs : []).find(isTranslatedImageDoc) ||
+          (Array.isArray(targetDocs) ? targetDocs : []).find(
+            (d: any) => d?.type === 'translator_document' && isLikelyImageAssetName(d?.name)
+          ) ||
+          (Array.isArray(targetDocs) ? targetDocs : []).find((d: any) =>
+            isLikelyImageAssetName(d?.name)
+          );
+        const url = doc?.url ?? doc?.targetDocumentUrl ?? doc?.documentUrl;
+        if (url && typeof url === 'string') {
+          logger.debug(`Found translated image URL on project: ${url}`);
+          return url;
+        }
+      } catch (err: any) {
+        logger.error('Error fetching translated image from project', err);
+      }
+    }
+
+    return null;
+  }
+
   private async pollUntilVideoOutput(
     orderId: string,
     order: any,
@@ -1476,25 +1586,31 @@ export class TranslationManagementSystem {
     return null;
   }
 
+  /**
+   * Creates a `document` order with an image source (v3 image-translation / n8n path),
+   * polls until the order completes, then returns the translated image URL (or `Order: {id}` if URL not yet on payload).
+   */
   async translateImage(
     image: ImageContent,
     targetLanguage: string,
-    level: number = this.config.ollang.defaultLevel
+    level: number = this.config.ollang.defaultLevel,
+    folderName?: string,
+    folderId?: string
   ): Promise<string> {
     const path = require('path');
+    const FormData = require('form-data');
+    const fs = require('fs');
 
     let translatedPath: string;
-    const isUrl = image.metadata.isUrl || false;
+    const isUrl = image.metadata?.isUrl || !!(image.url && !image.path);
 
     if (isUrl && image.url) {
       translatedPath = `${image.url}-${targetLanguage}`;
     } else {
       const ext = path.extname(image.path);
-      const basePath = image.path.slice(0, -ext.length);
-      translatedPath = `${basePath}-${targetLanguage}${ext}`;
+      const basePath = ext ? image.path.slice(0, -ext.length) : image.path;
+      translatedPath = `${basePath}-${targetLanguage}${ext || ''}`;
     }
-
-    const mockOrderId = `mock-image-${Date.now()}`;
 
     if (!this.state.imageTranslations) {
       this.state.imageTranslations = new Map();
@@ -1502,15 +1618,108 @@ export class TranslationManagementSystem {
 
     const mapKey = (image as any).textItemId || image.id;
 
+    let imageFolderId = folderId;
+    if (!imageFolderId && folderName) {
+      try {
+        const client = this.ollangClient.getClient();
+        const folders =
+          await client.get<Array<{ id: string; name: string; projectId?: string }>>(
+            '/scans/folders'
+          );
+        const targetFolder = folders.find((f) => f.name === folderName);
+        if (targetFolder?.id) {
+          imageFolderId = targetFolder.id;
+          logger.debug(`Resolved folderId ${imageFolderId} for image upload`);
+        }
+      } catch (error) {
+        logger.warn(`Could not resolve folderId for image upload: ${error}`);
+      }
+    }
+
+    const getFilenameFromUrl = (url: string): string => {
+      const urlWithoutQuery = url.split('?')[0];
+      const parts = urlWithoutQuery.split('/');
+      return parts[parts.length - 1] || 'image.png';
+    };
+
+    const ensureImageFileNameForPipeline = (name: string): string => {
+      const lower = name.toLowerCase();
+      if (/\.(jpe?g|png)$/.test(lower)) {
+        return name;
+      }
+      const base = name.replace(/\.[^/.]+$/, '');
+      return `${base || 'image'}.png`;
+    };
+
+    let projectId: string;
+
+    if (isUrl && image.url) {
+      let filename = ensureImageFileNameForPipeline(getFilenameFromUrl(image.url));
+      const uploadParams: Record<string, unknown> = {
+        url: image.url,
+        originalname: filename,
+        size: image.metadata?.size && image.metadata.size > 0 ? image.metadata.size : 1,
+        sourceLanguage: this.config.sourceLanguage,
+      };
+      if (imageFolderId) {
+        uploadParams.folderId = imageFolderId;
+      }
+
+      const uploadResponse = await this.ollangClient
+        .getClient()
+        .post<{ projectId: string }>('/integration/upload/direct-url', uploadParams);
+      projectId = uploadResponse.projectId;
+    } else {
+      const formData = new FormData();
+      formData.append('file', fs.createReadStream(image.path));
+      formData.append('name', `Image-Translation-${Date.now()}`);
+      formData.append('sourceLanguage', this.config.sourceLanguage);
+      if (imageFolderId) {
+        formData.append('folderId', imageFolderId);
+      }
+
+      const uploadResponse = await this.ollangClient
+        .getClient()
+        .uploadFile<{ projectId: string }>('/integration/upload/direct', formData);
+      projectId = uploadResponse.projectId;
+    }
+
+    const order = await this.ollangClient.orders.create({
+      orderType: 'document',
+      level,
+      projectId,
+      targetLanguageConfigs: [
+        {
+          language: targetLanguage,
+          isRush: false,
+        },
+      ],
+    });
+
+    const orderId = order.id;
+
     this.state.imageTranslations.set(mapKey, {
       originalPath: isUrl ? image.url! : image.path,
       translatedPath,
       targetLanguage,
       isUrl,
-      orderId: mockOrderId,
+      orderId,
     });
 
-    return mockOrderId;
+    const completedOrder = await this.pollImageDocumentOrder(orderId);
+    const outputUrl = await this.pollUntilImageOutput(orderId, completedOrder);
+    const resolvedPath = outputUrl || translatedPath;
+    const result = outputUrl || `Order: ${orderId}`;
+
+    this.state.imageTranslations.set(mapKey, {
+      originalPath: isUrl ? image.url! : image.path,
+      translatedPath: resolvedPath,
+      targetLanguage,
+      isUrl,
+      orderId,
+    });
+
+    return result;
   }
 
   async translateAudio(

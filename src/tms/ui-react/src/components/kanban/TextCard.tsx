@@ -9,10 +9,33 @@ interface TextCardProps {
   onToggleSelect?: (id: string) => void;
 }
 
+function imageThumbnailSrc(t: TranslatableText): string | undefined {
+  if (t.mediaUrl?.trim()) return t.mediaUrl.trim();
+  const tx = t.text?.trim() ?? '';
+  if (!/^https?:\/\//i.test(tx)) return undefined;
+  const looksImagePath = /\.(png|jpe?g|gif|webp|avif|svg)(\?|#|$)/i.test(tx);
+  const typedImage =
+    (t.category || '').toLowerCase() === 'image' || (t.mediaType || '').toLowerCase() === 'image';
+  if (looksImagePath || typedImage) return tx;
+  return undefined;
+}
+
+function isImageCard(t: TranslatableText): boolean {
+  const cat = (t.category || '').toLowerCase();
+  const mediaType = (t.mediaType || '').toLowerCase();
+  return (
+    cat === 'image' ||
+    mediaType === 'image' ||
+    !!(t.isMedia && t.mediaType !== 'video' && imageThumbnailSrc(t))
+  );
+}
+
 export function TextCard({ text, onToggleSelect }: TextCardProps) {
   const languages = Array.from(
     new Set([...Object.keys(text.statusByLanguage || {}), ...Object.keys(text.translations || {})])
   );
+  const thumbSrc = imageThumbnailSrc(text);
+  const showThumb = isImageCard(text) && !!thumbSrc;
 
   const getLangColor = (lang: string) => {
     const st = text.statusByLanguage?.[lang];
@@ -40,14 +63,29 @@ export function TextCard({ text, onToggleSelect }: TextCardProps) {
                 onClick={(e) => e.stopPropagation()}
               />
             )}
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{text.text}</p>
-              {text.i18nKey && (
-                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                  <FileText className="h-3 w-3" />
-                  {text.i18nKey}
-                </p>
+            <div className="flex flex-1 min-w-0 items-center gap-3">
+              {showThumb && (
+                <div className="relative h-11 w-14 shrink-0 overflow-hidden rounded-md border bg-muted">
+                  <img
+                    src={thumbSrc}
+                    alt={text.alt || ''}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
               )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium truncate">
+                  {text.alt?.trim() || text.text}
+                </p>
+                {text.i18nKey && (
+                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                    <FileText className="h-3 w-3" />
+                    {text.i18nKey}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
           <Badge variant="outline" className="shrink-0">

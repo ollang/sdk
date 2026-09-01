@@ -5,3 +5,11 @@ dist/
 *.log
 coverage/
 .vscode/
+
+# Java (java/)
+java/target/
+
+# Python (python/)
+__pycache__/
+*.egg-info/
+python/build/

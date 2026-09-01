@@ -1,0 +1,67 @@
+name: Publish Python SDK
+
+# Publishes python/ to PyPI via trusted publishing (OIDC, no API token needed).
+# One-time setup required on pypi.org — see RELEASING.md.
+#
+# Release: bump `version` in python/pyproject.toml and `__version__` in
+# python/src/ollang/__init__.py, then push a matching tag, e.g. python-v0.1.0.
+
+on:
+  push:
+    tags:
+      - 'python-v*'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package
+        run: pip install .
+
+      - name: Run tests
+        run: python -m unittest discover tests -v
+
+      - name: Check tag matches package version
+        run: |
+          TAG_VERSION="${GITHUB_REF_NAME#python-v}"
+          PKG_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match pyproject.toml version ($PKG_VERSION)" >&2
+            exit 1
+          fi
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write # Required for PyPI trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Build sdist and wheel
+        working-directory: python
+        run: |
+          pip install build
+          python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python/dist

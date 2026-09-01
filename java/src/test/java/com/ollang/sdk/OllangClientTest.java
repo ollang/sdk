@@ -12,6 +12,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -33,7 +35,9 @@ class OllangClientTest {
     String query;
     String apiKey;
     String contentType;
+    String contentLength;
     String body;
+    byte[] rawBody;
   }
 
   @BeforeEach
@@ -48,7 +52,9 @@ class OllangClientTest {
           recorded.query = exchange.getRequestURI().getRawQuery();
           recorded.apiKey = exchange.getRequestHeaders().getFirst("X-Api-Key");
           recorded.contentType = exchange.getRequestHeaders().getFirst("Content-Type");
-          recorded.body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+          recorded.contentLength = exchange.getRequestHeaders().getFirst("Content-Length");
+          recorded.rawBody = exchange.getRequestBody().readAllBytes();
+          recorded.body = new String(recorded.rawBody, StandardCharsets.ISO_8859_1);
           requests.add(recorded);
 
           byte[] response = nextBody.getBytes(StandardCharsets.UTF_8);
@@ -144,6 +150,60 @@ class OllangClientTest {
     assertTrue(request.body.contains("name=\"name\"\r\n\r\nMy Clip"));
     assertTrue(request.body.contains("name=\"sourceLanguage\"\r\n\r\nen"));
     assertTrue(request.body.endsWith("--" + boundary + "--\r\n"));
+    assertEquals(String.valueOf(request.body.getBytes(StandardCharsets.UTF_8).length), request.contentLength);
+  }
+
+  @Test
+  void uploadDirectFromPathStreamsFile() throws IOException {
+    Path file = Files.createTempFile("ollang-test", ".mp4");
+    try {
+      byte[] content = new byte[300_000];
+      for (int i = 0; i < content.length; i++) {
+        content[i] = (byte) (i % 251);
+      }
+      Files.write(file, content);
+
+      ollang.uploads().direct(file, "Big Clip", "en");
+
+      RecordedRequest request = requests.get(0);
+      assertEquals("/integration/upload/direct", request.path);
+      assertTrue(request.contentType.startsWith("multipart/form-data; boundary="));
+      String boundary = request.contentType.substring("multipart/form-data; boundary=".length());
+      assertEquals(String.valueOf(request.body.getBytes(StandardCharsets.ISO_8859_1).length), request.contentLength);
+      assertTrue(request.body.contains("filename=\"" + file.getFileName() + "\""));
+      assertTrue(request.body.contains("name=\"name\"\r\n\r\nBig Clip"));
+      assertTrue(request.body.endsWith("--" + boundary + "--\r\n"));
+
+      // The streamed file content must arrive intact, byte for byte.
+      byte[] raw = request.rawBody;
+      int start = indexOf(raw, "\r\n\r\n".getBytes(StandardCharsets.US_ASCII), 0) + 4;
+      byte[] received = java.util.Arrays.copyOfRange(raw, start, start + content.length);
+      assertTrue(java.util.Arrays.equals(content, received));
+    } finally {
+      Files.deleteIfExists(file);
+    }
+  }
+
+  @Test
+  void multipartContentLengthMatchesEncodedBody() {
+    MultipartBody body =
+        new MultipartBody()
+            .addFile("file", "a.bin", new byte[] {1, 2, 3}, null)
+            .addField("name", "n\u00e4me");
+    assertEquals(body.toBytes().length, body.contentLength());
+  }
+
+  private static int indexOf(byte[] haystack, byte[] needle, int from) {
+    outer:
+    for (int i = from; i <= haystack.length - needle.length; i++) {
+      for (int j = 0; j < needle.length; j++) {
+        if (haystack[i + j] != needle[j]) {
+          continue outer;
+        }
+      }
+      return i;
+    }
+    return -1;
   }
 
   @Test

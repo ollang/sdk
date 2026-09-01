@@ -79,7 +79,7 @@ public class OllangClient {
     HttpRequest request =
         baseRequest(path)
             .header("Content-Type", body.contentType())
-            .POST(HttpRequest.BodyPublishers.ofByteArray(body.toBytes()))
+            .POST(body.bodyPublisher())
             .build();
     return send(request);
   }

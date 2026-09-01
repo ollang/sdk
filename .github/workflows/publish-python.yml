@@ -41,12 +41,18 @@ jobs:
             echo "Tag version ($TAG_VERSION) does not match pyproject.toml version ($PKG_VERSION)" >&2
             exit 1
           fi
+          INIT_VERSION=$(python -c "import ollang; print(ollang.__version__)")
+          if [ "$TAG_VERSION" != "$INIT_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match ollang.__version__ ($INIT_VERSION)" >&2
+            exit 1
+          fi
 
   publish:
     needs: test
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
+      contents: read # Job-level permissions replace the workflow default; checkout needs this
       id-token: write # Required for PyPI trusted publishing (OIDC)
     steps:
       - uses: actions/checkout@v4

@@ -67,7 +67,7 @@ for order in page["data"]:
 # Request a revision on an order
 client.revisions.create(
     order_id="ORDER_ID",
-    type="text",
+    type="wrongSubtitle",
     time="00:01:23",
     description="Fix the terminology in this segment",
 )

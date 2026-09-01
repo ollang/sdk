@@ -16,6 +16,12 @@ class Revisions:
         time: str,
         description: Optional[str] = None,
     ) -> Dict[str, Any]:
+        """Create a revision request for an order.
+
+        ``type`` is one of ``missingSubtitle``, ``wrongSubtitle``, ``syncError``,
+        ``formatError`` or ``other``. ``time`` is the timestamp the revision
+        refers to, e.g. ``"00:01:23"``.
+        """
         body: Dict[str, Any] = {"type": type, "time": time}
         if description is not None:
             body["description"] = description

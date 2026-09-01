@@ -16,7 +16,8 @@ public class Revisions {
   /**
    * Creates a revision request for an order.
    *
-   * @param type revision type
+   * @param type revision type: one of {@code missingSubtitle}, {@code wrongSubtitle},
+   *     {@code syncError}, {@code formatError} or {@code other}
    * @param time timestamp the revision refers to, e.g. {@code "00:01:23"}
    * @param description optional details for the reviewer; may be {@code null}
    */

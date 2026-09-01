@@ -98,7 +98,7 @@ class ClientTests(unittest.TestCase):
         )
 
     def test_revisions_paths(self):
-        self.ollang.revisions.create("o1", type="text", time="00:01:23", description="typo")
+        self.ollang.revisions.create("o1", type="wrongSubtitle", time="00:01:23", description="typo")
         self.ollang.revisions.list("o1")
         self.ollang.revisions.delete("o1", "r1")
         self.assertTrue(self.session.calls[0]["url"].endswith("/integration/revision/o1"))

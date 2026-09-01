@@ -82,7 +82,7 @@ JsonElement page = ollang.orders().list(
     new Orders.ListOptions().page(1).take(20).status("completed"));
 
 // Request a revision on an order
-ollang.revisions().create("ORDER_ID", "text", "00:01:23", "Fix the terminology here");
+ollang.revisions().create("ORDER_ID", "wrongSubtitle", "00:01:23", "Fix the terminology here");
 
 // Custom instructions
 ollang.customInstructions().create("tone", "Formal, brand-safe tone", null);

@@ -161,13 +161,13 @@ class OllangClientTest {
 
   @Test
   void revisionsBuildPaths() {
-    ollang.revisions().create("o1", "text", "00:01:23", "typo");
+    ollang.revisions().create("o1", "wrongSubtitle", "00:01:23", "typo");
     ollang.revisions().list("o1");
     ollang.revisions().delete("o1", "r1");
 
     assertEquals("/integration/revision/o1", requests.get(0).path);
     assertEquals(
-        "{\"type\":\"text\",\"time\":\"00:01:23\",\"description\":\"typo\"}",
+        "{\"type\":\"wrongSubtitle\",\"time\":\"00:01:23\",\"description\":\"typo\"}",
         requests.get(0).body);
     assertEquals("GET", requests.get(1).method);
     assertEquals("DELETE", requests.get(2).method);

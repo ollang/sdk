@@ -2,6 +2,16 @@
 
 Official TypeScript/Node.js SDK for the Ollang API.
 
+## Other Languages
+
+This repository also hosts the official Ollang API client libraries for other languages:
+
+| Language   | Location                 | Install                                            |
+| ---------- | ------------------------ | -------------------------------------------------- |
+| TypeScript | this package             | `npm install @ollang-dev/sdk`                      |
+| Python     | [`python/`](./python)    | `pip install ollang-sdk`                           |
+| Java       | [`java/`](./java)        | `com.ollang:ollang-sdk` (Maven) — see [java/README](./java/README.md) |
+
 ## Installation
 
 ```bash

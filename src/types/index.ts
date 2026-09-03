@@ -46,6 +46,12 @@ export interface CreateOrderParams {
   sourceLanguage?: string;
   content?: string;
   targetLanguageConfigs: TargetLanguageConfig[];
+  /** Webhook called when the order finishes. */
+  callbackUrl?: string;
+  /** Runs QC automatically once the order completes. */
+  autoQc?: boolean;
+  /** Translation memory IDs from `memories.list()`. */
+  selectedMemories?: string[];
 }
 
 export interface Order {
@@ -209,4 +215,214 @@ export interface CustomInstructionSuggestion {
   key: string;
   value: string;
   description?: string;
+}
+
+// --- Translation memories ---
+
+export interface Memory {
+  id: string;
+  title: string;
+  memoryItemsCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MemoryItemInput {
+  sourceLanguage: string;
+  targetLanguage: string;
+  sourceText: string;
+  targetText: string;
+}
+
+export interface MemoryImportStarted {
+  jobId: string;
+  status: string;
+}
+
+export interface MemoryImportJob {
+  jobId: string;
+  status: string;
+  progress: number;
+  itemsCount: number | null;
+  error: string | null;
+  completedAt: string | null;
+  vectorizationStatus: string | null;
+  vectorizationProgress: number | null;
+  vectorizationError: string | null;
+  vectorizationCompletedAt: string | null;
+}
+
+// --- Folders ---
+
+export interface Folder {
+  id: string;
+  name: string;
+  createdAt: string;
+  ordersCount?: number;
+}
+
+export interface ListFoldersParams {
+  pageOptions?: PageOptions;
+}
+
+export interface FoldersListResponse {
+  data: Folder[];
+  meta: PaginationMeta;
+}
+
+export interface FolderOrderLanguagePair {
+  sourceLanguage: string;
+  targetLanguage: string;
+  ordersCount?: number;
+}
+
+export interface AssignTranslatorParams {
+  translatorId: string;
+  /** ISO 8601 date. */
+  deadline?: string;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+}
+
+export interface UnassignTranslatorParams {
+  sourceLanguage?: string;
+  targetLanguage?: string;
+}
+
+export interface BulkExportFoldersParams {
+  folderIds: string[];
+  targetLanguages: string[];
+}
+
+// --- Content ---
+
+export interface ContentTranslationInput {
+  sourceText: string;
+  targetText: string;
+  elementId?: string;
+  /** Defaults to `text`. */
+  type?: string;
+}
+
+export interface ImportContentParams {
+  targetLanguage: string;
+  translations: ContentTranslationInput[];
+}
+
+export interface ImportContentResponse {
+  success: boolean;
+  imported: number;
+}
+
+export interface ExportContentParams {
+  targetLanguage?: string;
+  targetLanguages?: string[];
+  tag?: string;
+  tags?: string[];
+  orderIds?: string[];
+}
+
+// --- Billing ---
+
+export interface CreditWallet {
+  balance: number;
+  currency?: string;
+}
+
+export interface ListConsumptionParams {
+  pageOptions?: PageOptions;
+  filter?: {
+    search?: string;
+    /** ISO 8601 date. */
+    from?: string;
+    /** ISO 8601 date. */
+    to?: string;
+    provider?: string;
+    orderType?: string;
+    createdBy?: string;
+    orderId?: string;
+    tag?: string;
+  };
+}
+
+export interface ConsumptionEntry {
+  id: string;
+  orderId?: string;
+  provider?: string;
+  orderType?: string;
+  amount?: number;
+  createdAt: string;
+}
+
+export interface ConsumptionListResponse {
+  data: ConsumptionEntry[];
+  meta: PaginationMeta;
+}
+
+// --- Locales ---
+
+export interface Language {
+  code: string;
+  name: string;
+  nativeName?: string;
+  variants?: Language[];
+}
+
+export interface LanguageValidationResult {
+  valid: boolean;
+  code?: string;
+  language?: string;
+  region?: string;
+  reasons?: string[];
+}
+
+// --- Figma ---
+
+export interface CreateFigmaOrderParams {
+  fileKey: string;
+  fileUrl: string;
+  sourceLanguage: string;
+  targetLanguages: string[];
+  folderId?: string;
+}
+
+export interface FigmaOrderSummary {
+  orderId: string;
+  targetLanguage: string;
+  status: string;
+}
+
+export interface CreateFigmaOrderResponse {
+  projectId: string;
+  importId: string;
+  orders: FigmaOrderSummary[];
+}
+
+// --- URL-based creation ---
+
+export interface CreateProjectByUrlParams {
+  url: string;
+  name: string;
+  sourceLanguage: string;
+  folderId?: string;
+  notes?: OrderNote[];
+}
+
+export interface DirectUrlUploadParams {
+  url: string;
+  name: string;
+  /** File size in bytes. */
+  size: number;
+  sourceLanguage: string;
+  folderId?: string;
+}
+
+// --- Order review gates ---
+
+export interface OrderReviewInfo {
+  inReview: boolean;
+  tag?: string;
+  reviewType?: string;
+  enteredReviewAt?: string;
+  reviewers?: string[];
 }

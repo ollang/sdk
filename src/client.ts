@@ -49,6 +49,18 @@ export class OllangClient {
     return response.data;
   }
 
+  /** GETs an endpoint that returns a binary body (for example an XLSX export). */
+  async getBuffer(path: string, params?: any): Promise<Buffer> {
+    const response = await this.client.get(path, { params, responseType: 'arraybuffer' });
+    return Buffer.from(response.data);
+  }
+
+  /** POSTs to an endpoint that returns a binary body (for example an XLSX export). */
+  async postBuffer(path: string, data?: any): Promise<Buffer> {
+    const response = await this.client.post(path, data, { responseType: 'arraybuffer' });
+    return Buffer.from(response.data);
+  }
+
   async uploadFile<T>(path: string, formData: any): Promise<T> {
     const headers = formData.getHeaders
       ? formData.getHeaders()

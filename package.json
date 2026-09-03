@@ -1,6 +1,6 @@
 {
   "name": "@ollang-dev/sdk",
-  "version": "0.3.12",
+  "version": "0.4.0",
   "description": "Official TypeScript/Node.js SDK for Ollang API - Translation, Transcription, Dubbing, Closed Captioning, and I18n Management System",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -77,12 +77,15 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.17",
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.0.0",
     "@types/react": "^18.3.28",
     "@typescript-eslint/eslint-plugin": "^6.15.0",
     "@typescript-eslint/parser": "^6.15.0",
     "eslint": "^8.55.0",
+    "jest": "^29.7.0",
     "prettier": "^3.1.0",
+    "ts-jest": "^29.4.12",
     "ts-loader": "^9.5.0",
     "typescript": "^5.3.0",
     "webpack": "^5.89.0",

@@ -3,12 +3,14 @@ import {
   Order,
   CreateOrderParams,
   ListOrdersParams,
+  OrderReviewInfo,
   OrdersListResponse,
   RunQcEvaluationParams,
   RunQcEvaluationResponse,
   RerunOrderParams,
   RerunOrderResponse,
 } from '../types';
+import { saveBuffer } from './_files';
 
 export class Orders {
   constructor(private client: OllangClient) {}
@@ -96,5 +98,41 @@ export class Orders {
 
   async rerun(orderId: string, params?: RerunOrderParams): Promise<RerunOrderResponse> {
     return this.client.post<RerunOrderResponse>(`/integration/orders/${orderId}/rerun`, params);
+  }
+
+  /** Cancels a human review previously requested for an order. */
+  async cancelHumanReview(orderId: string): Promise<void> {
+    return this.client.post<void>(`/integration/orders/${orderId}/cancel-human-review`);
+  }
+
+  /** Requests a video with the finished subtitles burned in. */
+  async requestSubtitleEmbedding(orderId: string): Promise<void> {
+    return this.client.post<void>(`/integration/orders/${orderId}/subtitle-embedding`);
+  }
+
+  /**
+   * Inspects the review gate an order is paused at, if any.
+   *
+   * Reports which team tag owns the gate, the review type, when the order
+   * entered review, and who can clear it. Useful when an order sits in the
+   * `review` status.
+   */
+  async reviewInfo(orderId: string): Promise<OrderReviewInfo> {
+    return this.client.get<OrderReviewInfo>(`/integration/orders/${orderId}/review/info`);
+  }
+
+  /**
+   * Exports an order's timestamps, transcriptions and translations as XLSX.
+   *
+   * Resolves to the raw file bytes. Use {@link exportXlsxToFile} to write them
+   * straight to disk.
+   */
+  async exportXlsx(orderId: string): Promise<Buffer> {
+    return this.client.getBuffer(`/integration/orders/${orderId}/export-xlsx`);
+  }
+
+  /** Exports an order as XLSX and saves the workbook to `filePath`. */
+  async exportXlsxToFile(orderId: string, filePath: string): Promise<string> {
+    return saveBuffer(await this.exportXlsx(orderId), filePath);
   }
 }

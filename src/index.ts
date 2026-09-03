@@ -4,6 +4,12 @@ import { Projects } from './resources/projects';
 import { Revisions } from './resources/revisions';
 import { Uploads } from './resources/uploads';
 import { CustomInstructions } from './resources/customInstructions';
+import { Memories } from './resources/memories';
+import { Folders } from './resources/folders';
+import { Content } from './resources/content';
+import { Billing } from './resources/billing';
+import { Locales } from './resources/locales';
+import { Figma } from './resources/figma';
 import { Scans, ScanSessionResponse } from './resources/scans';
 import { CMS } from './resources/cms';
 import { OllangConfig } from './types';
@@ -18,6 +24,12 @@ export class Ollang {
   public revisions: Revisions;
   public uploads: Uploads;
   public customInstructions: CustomInstructions;
+  public memories: Memories;
+  public folders: Folders;
+  public content: Content;
+  public billing: Billing;
+  public locales: Locales;
+  public figma: Figma;
   public scans: Scans;
   public cms: CMS;
 
@@ -29,6 +41,12 @@ export class Ollang {
     this.revisions = new Revisions(this.client);
     this.uploads = new Uploads(this.client);
     this.customInstructions = new CustomInstructions(this.client);
+    this.memories = new Memories(this.client);
+    this.folders = new Folders(this.client);
+    this.content = new Content(this.client);
+    this.billing = new Billing(this.client);
+    this.locales = new Locales(this.client);
+    this.figma = new Figma(this.client);
     this.scans = new Scans(this.client);
     this.cms = new CMS(this.client);
   }

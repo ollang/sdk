@@ -1,11 +1,14 @@
 package com.ollang.sdk.resources;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.ollang.sdk.OllangClient;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
-/** Read and list projects. */
+/** Create, read and list projects. */
 public class Projects {
 
   private final OllangClient client;
@@ -24,6 +27,45 @@ public class Projects {
 
   public JsonElement list(ListOptions options) {
     return client.get("/integration/project", options == null ? null : options.toQueryParams());
+  }
+
+  /**
+   * Creates a project from a file the platform fetches itself.
+   *
+   * <p>The file at {@code url} is downloaded server-side, so its bytes never pass through your
+   * process. Prefer this over {@code uploads().direct(...)} for large remote files. Each note is
+   * a map such as {@code {"details": "...", "timeStamp": "00:01:23"}}.
+   */
+  public JsonElement createByUrl(
+      String url,
+      String name,
+      String sourceLanguage,
+      String folderId,
+      List<Map<String, String>> notes) {
+    JsonObject body = new JsonObject();
+    body.addProperty("url", url);
+    body.addProperty("name", name);
+    body.addProperty("sourceLanguage", sourceLanguage);
+    if (folderId != null) {
+      body.addProperty("folderId", folderId);
+    }
+    if (notes != null) {
+      JsonArray array = new JsonArray();
+      for (Map<String, String> note : notes) {
+        JsonObject entry = new JsonObject();
+        for (Map.Entry<String, String> field : note.entrySet()) {
+          entry.addProperty(field.getKey(), field.getValue());
+        }
+        array.add(entry);
+      }
+      body.add("notes", array);
+    }
+    return client.post("/integration/project/create-by-url", body);
+  }
+
+  /** Creates a project from a remote file URL. */
+  public JsonElement createByUrl(String url, String name, String sourceLanguage) {
+    return createByUrl(url, name, sourceLanguage, null, null);
   }
 
   /** Pagination options for {@link #list(ListOptions)}. */

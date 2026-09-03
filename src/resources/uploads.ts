@@ -2,6 +2,7 @@ import { OllangClient } from '../client';
 import {
   DirectUploadParams,
   DirectUploadResponse,
+  DirectUrlUploadParams,
   UploadVttParams,
   UploadVttResponse,
 } from '../types';
@@ -28,5 +29,20 @@ export class Uploads {
     formData.append('orderId', params.orderId);
 
     return this.client.uploadFile<UploadVttResponse>('/integration/upload/vtt', formData);
+  }
+
+  /**
+   * Registers a remote file, which the platform fetches server-side.
+   *
+   * Unlike {@link direct}, the bytes never pass through your process, so this
+   * has no practical file-size ceiling. `url` must be a direct link such as an
+   * S3 presigned URL.
+   */
+  async directUrl(params: DirectUrlUploadParams): Promise<DirectUploadResponse> {
+    const { name, ...rest } = params;
+    return this.client.post<DirectUploadResponse>('/integration/upload/direct-url', {
+      ...rest,
+      originalname: name,
+    });
   }
 }

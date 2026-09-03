@@ -42,10 +42,18 @@ class OllangClient:
     def delete(self, path: str) -> Any:
         return self._request("DELETE", path)
 
+    def get_bytes(self, path: str, params: Optional[Dict[str, Any]] = None) -> bytes:
+        """GET an endpoint that returns a binary body (e.g. an XLSX export)."""
+        return self._request_raw("GET", path, params=params)
+
+    def post_bytes(self, path: str, json: Optional[Any] = None) -> bytes:
+        """POST to an endpoint that returns a binary body (e.g. an XLSX export)."""
+        return self._request_raw("POST", path, json=json)
+
     def post_multipart(self, path: str, files: Dict[str, Any], data: Dict[str, Any]) -> Any:
         return self._request("POST", path, files=files, data=data)
 
-    def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+    def _send(self, method: str, path: str, **kwargs: Any):
         url = self.base_url + path
         response = self._session.request(method, url, timeout=self.timeout, **kwargs)
 
@@ -59,6 +67,13 @@ class OllangClient:
                 status_code=response.status_code,
                 body=body,
             )
+        return response
+
+    def _request_raw(self, method: str, path: str, **kwargs: Any) -> bytes:
+        return self._send(method, path, **kwargs).content
+
+    def _request(self, method: str, path: str, **kwargs: Any) -> Any:
+        response = self._send(method, path, **kwargs)
 
         if not response.content:
             return None

@@ -12,17 +12,15 @@ Maven:
 <dependency>
   <groupId>com.ollang</groupId>
   <artifactId>ollang-sdk</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.ollang:ollang-sdk:0.1.0'
+implementation 'com.ollang:ollang-sdk:0.2.0'
 ```
-
-> Not yet published to Maven Central — until then, build from source with `mvn install` in this directory.
 
 ## Quick Start
 
@@ -60,13 +58,19 @@ Get your API key from your project settings at [Olabs](https://lab.ollang.com).
 
 ## Resources
 
-| Resource                       | Description                            |
-| ------------------------------ | -------------------------------------- |
-| `ollang.projects()`            | Read and list projects                 |
-| `ollang.uploads()`             | Upload files (video, audio, documents) |
-| `ollang.orders()`              | Create and track translation orders    |
-| `ollang.revisions()`           | Request revisions on completed orders  |
-| `ollang.customInstructions()`  | Set custom translation instructions    |
+| Resource                      | Description                                          |
+| ----------------------------- | ---------------------------------------------------- |
+| `ollang.projects()`           | Create, read and list projects                       |
+| `ollang.uploads()`            | Upload files, or register remote ones by URL         |
+| `ollang.orders()`             | Create, track, review and export orders              |
+| `ollang.folders()`            | Browse folders and act on all their orders at once   |
+| `ollang.revisions()`          | Request revisions on completed orders                |
+| `ollang.memories()`           | Translation memories and their items                 |
+| `ollang.customInstructions()` | Set custom translation instructions                  |
+| `ollang.content()`            | Import and export translation units                  |
+| `ollang.billing()`            | Credit wallet and consumption history                |
+| `ollang.locales()`            | Resolve and validate language codes                  |
+| `ollang.figma()`              | Import Figma files and track their orders            |
 
 All methods return the parsed JSON response as a Gson `JsonElement`. Non-2xx
 responses throw `OllangApiException`, which carries the HTTP status code and
@@ -87,8 +91,43 @@ ollang.revisions().create("ORDER_ID", "wrongSubtitle", "00:01:23", "Fix the term
 // Custom instructions
 ollang.customInstructions().create("tone", "Formal, brand-safe tone", null);
 
+// Resolve a language code before using it
+JsonElement languages = ollang.locales().search("portu");
+JsonElement check = ollang.locales().validate("pt-PT");
+
+// Translation memories
+JsonElement memory = ollang.memories().create("Brand terms");
+ollang.memories().importItems(
+    memory.getAsJsonObject().get("id").getAsString(),
+    List.of(Map.of(
+        "sourceLanguage", "en",
+        "targetLanguage", "fr",
+        "sourceText", "Sign in",
+        "targetText", "Se connecter")));
+
+// Assign a translator to every French order in a folder
+ollang.folders().assignTranslator("FOLDER_ID", "TRANSLATOR_ID", null, null, "fr");
+
+// Export an order as XLSX, straight to disk
+ollang.orders().exportXlsxToFile("ORDER_ID", Path.of("order.xlsx"));
+
+// Credit balance
+JsonElement wallet = ollang.billing().credits();
+
 // Endpoints not wrapped yet? Use the underlying HTTP client:
-JsonElement languages = ollang.client().get("/integration/supported-languages");
+JsonElement raw = ollang.client().get("/integration/orders");
+```
+
+### Binary exports
+
+The XLSX endpoints return raw bytes rather than JSON. Each has a
+`...ToFile` companion that writes the workbook to a path, creating parent
+directories as needed:
+
+```java
+byte[] bytes = ollang.orders().exportXlsx("ORDER_ID");
+Path saved = ollang.folders().exportXlsxToFile(
+    List.of("FOLDER_ID"), List.of("fr", "de"), Path.of("out/folders.xlsx"));
 ```
 
 ## Configuration

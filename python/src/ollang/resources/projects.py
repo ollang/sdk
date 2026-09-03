@@ -1,10 +1,10 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from .._client import OllangClient
 
 
 class Projects:
-    """Read and list projects."""
+    """Create, read and list projects."""
 
     def __init__(self, client: OllangClient):
         self._client = client
@@ -33,3 +33,29 @@ class Projects:
             params["orderDirection"] = order_direction
 
         return self._client.get("/integration/project", params=params)
+
+    def create_by_url(
+        self,
+        url: str,
+        name: str,
+        source_language: str,
+        folder_id: Optional[str] = None,
+        notes: Optional[List[Dict[str, str]]] = None,
+    ) -> Dict[str, Any]:
+        """Create a project from a file the platform fetches itself.
+
+        The file at ``url`` is downloaded server-side, so its bytes never pass
+        through your process. Prefer this over ``uploads.direct`` for large
+        remote files. ``notes`` entries look like
+        ``{"details": "...", "timeStamp": "00:01:23"}``.
+        """
+        body: Dict[str, Any] = {
+            "url": url,
+            "name": name,
+            "sourceLanguage": source_language,
+        }
+        if folder_id is not None:
+            body["folderId"] = folder_id
+        if notes is not None:
+            body["notes"] = notes
+        return self._client.post("/integration/project/create-by-url", json=body)

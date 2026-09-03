@@ -10,6 +10,8 @@ on:
       - 'src/**'
       - 'tests/**'
       - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
       - 'jest.config.js'
       - '.github/workflows/ci-libs.yml'
   pull_request:
@@ -19,6 +21,8 @@ on:
       - 'src/**'
       - 'tests/**'
       - 'package.json'
+      - 'package-lock.json'
+      - 'tsconfig.json'
       - 'jest.config.js'
       - '.github/workflows/ci-libs.yml'
 

@@ -1,4 +1,4 @@
-name: Java & Python SDK Tests
+name: SDK Tests
 
 on:
   push:
@@ -7,11 +7,19 @@ on:
     paths:
       - 'java/**'
       - 'python/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'jest.config.js'
       - '.github/workflows/ci-libs.yml'
   pull_request:
     paths:
       - 'java/**'
       - 'python/**'
+      - 'src/**'
+      - 'tests/**'
+      - 'package.json'
+      - 'jest.config.js'
       - '.github/workflows/ci-libs.yml'
 
 permissions:
@@ -55,3 +63,21 @@ jobs:
 
       - name: Check release artifacts build
         run: mvn -B -P release -DskipTests -Dgpg.skip=true verify
+
+  node:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npx jest

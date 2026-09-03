@@ -13,6 +13,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.StringJoiner;
 
@@ -53,6 +54,15 @@ public class OllangClient {
     return send(request);
   }
 
+  /**
+   * GETs with repeated query parameters, for filters the API expects more than once (for example
+   * {@code targetLanguages[]=fr&targetLanguages[]=de}).
+   */
+  public JsonElement getMulti(String path, Map<String, List<String>> queryParams) {
+    HttpRequest request = baseRequest(path + multiQueryString(queryParams)).GET().build();
+    return send(request);
+  }
+
   public JsonElement post(String path, JsonElement body) {
     HttpRequest request =
         baseRequest(path)
@@ -75,6 +85,26 @@ public class OllangClient {
     return send(baseRequest(path).DELETE().build());
   }
 
+  /** GETs an endpoint that returns a binary body (for example an XLSX export). */
+  public byte[] getBytes(String path) {
+    return getBytes(path, null);
+  }
+
+  /** GETs an endpoint that returns a binary body (for example an XLSX export). */
+  public byte[] getBytes(String path, Map<String, String> queryParams) {
+    return sendForBytes(baseRequest(path + queryString(queryParams)).GET().build());
+  }
+
+  /** POSTs to an endpoint that returns a binary body (for example an XLSX export). */
+  public byte[] postBytes(String path, JsonElement body) {
+    HttpRequest request =
+        baseRequest(path)
+            .header("Content-Type", "application/json")
+            .POST(jsonPublisher(body))
+            .build();
+    return sendForBytes(request);
+  }
+
   public JsonElement postMultipart(String path, MultipartBody body) {
     HttpRequest request =
         baseRequest(path)
@@ -89,7 +119,7 @@ public class OllangClient {
         .uri(URI.create(baseUrl + pathAndQuery))
         .timeout(timeout)
         .header("X-Api-Key", apiKey)
-        .header("Accept", "application/json");
+        .header("Accept", "*/*");
   }
 
   private HttpRequest.BodyPublisher jsonPublisher(JsonElement body) {
@@ -97,6 +127,44 @@ public class OllangClient {
       return HttpRequest.BodyPublishers.noBody();
     }
     return HttpRequest.BodyPublishers.ofString(gson.toJson(body), StandardCharsets.UTF_8);
+  }
+
+  private byte[] sendForBytes(HttpRequest request) {
+    HttpResponse<byte[]> response;
+    try {
+      response = http.send(request, HttpResponse.BodyHandlers.ofByteArray());
+    } catch (IOException e) {
+      throw new OllangApiException(
+          "Ollang API request failed: "
+              + request.method()
+              + " "
+              + request.uri()
+              + " ("
+              + e.getMessage()
+              + ")",
+          -1,
+          null,
+          null);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      throw new OllangApiException("Ollang API request interrupted", -1, null, null);
+    }
+
+    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+      String body = new String(response.body(), StandardCharsets.UTF_8);
+      throw new OllangApiException(
+          "Ollang API request failed: "
+              + request.method()
+              + " "
+              + request.uri()
+              + " -> "
+              + response.statusCode(),
+          response.statusCode(),
+          body,
+          parseJsonOrNull(body));
+    }
+
+    return response.body();
   }
 
   private JsonElement send(HttpRequest request) {
@@ -142,6 +210,19 @@ public class OllangClient {
     } catch (JsonSyntaxException e) {
       return null;
     }
+  }
+
+  static String multiQueryString(Map<String, List<String>> queryParams) {
+    if (queryParams == null || queryParams.isEmpty()) {
+      return "";
+    }
+    StringJoiner joiner = new StringJoiner("&", "?", "");
+    for (Map.Entry<String, List<String>> entry : queryParams.entrySet()) {
+      for (String value : entry.getValue()) {
+        joiner.add(encode(entry.getKey()) + "=" + encode(value));
+      }
+    }
+    return joiner.toString().equals("?") ? "" : joiner.toString();
   }
 
   static String queryString(Map<String, String> queryParams) {

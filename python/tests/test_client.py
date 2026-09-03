@@ -1,15 +1,21 @@
 import json
+import os
+import tempfile
 import unittest
 
 from ollang import Ollang, OllangAPIError
 
 
 class FakeResponse:
-    def __init__(self, status_code=200, body=None):
+    def __init__(self, status_code=200, body=None, raw=None):
         self.status_code = status_code
         self._body = body
-        self.content = b"" if body is None else json.dumps(body).encode()
-        self.text = "" if body is None else json.dumps(body)
+        if raw is not None:
+            self.content = raw
+            self.text = ""
+        else:
+            self.content = b"" if body is None else json.dumps(body).encode()
+            self.text = "" if body is None else json.dumps(body)
 
     @property
     def ok(self):
@@ -136,6 +142,253 @@ class ClientTests(unittest.TestCase):
             self.ollang.projects.list()
         self.assertEqual(ctx.exception.status_code, 401)
         self.assertEqual(ctx.exception.body, {"message": "invalid key"})
+
+
+class MemoriesTests(unittest.TestCase):
+    def setUp(self):
+        self.session = FakeSession()
+        self.ollang = make_client(self.session)
+
+    def test_crud_paths(self):
+        self.ollang.memories.list()
+        self.ollang.memories.create("Brand terms")
+        self.ollang.memories.get("m1")
+        self.ollang.memories.update("m1", "Renamed")
+        self.ollang.memories.delete("m1")
+        calls = self.session.calls
+        self.assertEqual(calls[0]["method"], "GET")
+        self.assertTrue(calls[0]["url"].endswith("/integration/memories"))
+        self.assertEqual(calls[1]["method"], "POST")
+        self.assertEqual(calls[1]["json"], {"title": "Brand terms"})
+        self.assertTrue(calls[2]["url"].endswith("/integration/memories/m1"))
+        self.assertEqual(calls[3]["method"], "PATCH")
+        self.assertEqual(calls[3]["json"], {"title": "Renamed"})
+        self.assertEqual(calls[4]["method"], "DELETE")
+
+    def test_import_items_and_job(self):
+        items = [
+            {
+                "sourceLanguage": "en",
+                "targetLanguage": "fr",
+                "sourceText": "hello",
+                "targetText": "bonjour",
+            }
+        ]
+        self.ollang.memories.import_items("m1", items)
+        self.ollang.memories.get_import_job("j1")
+        calls = self.session.calls
+        self.assertTrue(calls[0]["url"].endswith("/integration/memories/m1/items/import"))
+        self.assertEqual(calls[0]["json"], {"items": items})
+        self.assertTrue(
+            calls[1]["url"].endswith("/integration/memories/import-jobs/j1")
+        )
+
+
+class FoldersTests(unittest.TestCase):
+    def setUp(self):
+        self.session = FakeSession()
+        self.ollang = make_client(self.session)
+
+    def test_list_and_language_pairs(self):
+        self.ollang.folders.list(page=2, take=5, search="promo")
+        self.ollang.folders.order_language_pairs("f1", status="completed")
+        calls = self.session.calls
+        self.assertEqual(calls[0]["params"], {"page": 2, "take": 5, "search": "promo"})
+        self.assertTrue(
+            calls[1]["url"].endswith("/integration/folder/f1/order-language-pairs")
+        )
+        self.assertEqual(calls[1]["params"], {"status": "completed"})
+
+    def test_assign_and_unassign(self):
+        self.ollang.folders.assign_translator(
+            "f1", translator_id="t1", deadline="2026-01-01", target_language="fr"
+        )
+        self.ollang.folders.unassign_translator("f1", target_language="fr")
+        calls = self.session.calls
+        self.assertTrue(
+            calls[0]["url"].endswith("/integration/folder/f1/assign-translator-to-orders")
+        )
+        self.assertEqual(
+            calls[0]["json"],
+            {"translatorId": "t1", "deadline": "2026-01-01", "targetLanguage": "fr"},
+        )
+        self.assertTrue(
+            calls[1]["url"].endswith(
+                "/integration/folder/f1/unassign-translator-from-orders"
+            )
+        )
+        self.assertEqual(calls[1]["json"], {"targetLanguage": "fr"})
+
+    def test_export_xlsx_returns_bytes(self):
+        self.session.next_response = FakeResponse(200, raw=b"PK\x03\x04xlsx")
+        data = self.ollang.folders.export_xlsx(["f1", "f2"], ["fr", "de"])
+        self.assertEqual(data, b"PK\x03\x04xlsx")
+        call = self.session.calls[0]
+        self.assertEqual(call["method"], "POST")
+        self.assertTrue(call["url"].endswith("/integration/folder/export-xlsx"))
+        self.assertEqual(
+            call["json"], {"folderIds": ["f1", "f2"], "targetLanguages": ["fr", "de"]}
+        )
+
+    def test_export_xlsx_to_file(self):
+        self.session.next_response = FakeResponse(200, raw=b"PK\x03\x04xlsx")
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "nested", "folders.xlsx")
+            written = self.ollang.folders.export_xlsx_to_file(["f1"], ["fr"], target)
+            self.assertEqual(written, target)
+            with open(target, "rb") as handle:
+                self.assertEqual(handle.read(), b"PK\x03\x04xlsx")
+
+
+class OrderExtrasTests(unittest.TestCase):
+    def setUp(self):
+        self.session = FakeSession()
+        self.ollang = make_client(self.session)
+
+    def test_review_and_embedding_paths(self):
+        self.ollang.orders.cancel_human_review("o1")
+        self.ollang.orders.request_subtitle_embedding("o1")
+        self.ollang.orders.review_info("o1")
+        calls = self.session.calls
+        self.assertTrue(
+            calls[0]["url"].endswith("/integration/orders/o1/cancel-human-review")
+        )
+        self.assertTrue(
+            calls[1]["url"].endswith("/integration/orders/o1/subtitle-embedding")
+        )
+        self.assertEqual(calls[2]["method"], "GET")
+        self.assertTrue(calls[2]["url"].endswith("/integration/orders/o1/review/info"))
+
+    def test_export_xlsx_to_file(self):
+        self.session.next_response = FakeResponse(200, raw=b"xlsx-bytes")
+        with tempfile.TemporaryDirectory() as tmp:
+            target = os.path.join(tmp, "order.xlsx")
+            self.ollang.orders.export_xlsx_to_file("o1", target)
+            call = self.session.calls[0]
+            self.assertEqual(call["method"], "GET")
+            self.assertTrue(call["url"].endswith("/integration/orders/o1/export-xlsx"))
+            with open(target, "rb") as handle:
+                self.assertEqual(handle.read(), b"xlsx-bytes")
+
+    def test_create_passes_new_optional_fields(self):
+        self.ollang.orders.create(
+            order_type="subtitle",
+            level=1,
+            target_language_configs=[{"language": "fr"}],
+            callback_url="https://example.com/hook",
+            auto_qc=True,
+            selected_memories=["m1"],
+        )
+        body = self.session.calls[0]["json"]
+        self.assertEqual(body["callbackUrl"], "https://example.com/hook")
+        self.assertTrue(body["autoQc"])
+        self.assertEqual(body["selectedMemories"], ["m1"])
+
+
+class ContentBillingLocalesFigmaTests(unittest.TestCase):
+    def setUp(self):
+        self.session = FakeSession()
+        self.ollang = make_client(self.session)
+
+    def test_content_import_and_export(self):
+        translations = [{"sourceText": "hi", "targetText": "salut"}]
+        self.ollang.content.import_("fr", translations)
+        self.ollang.content.export(target_languages=["fr", "de"], tags=["ui"])
+        calls = self.session.calls
+        self.assertTrue(calls[0]["url"].endswith("/integration/content/import"))
+        self.assertEqual(
+            calls[0]["json"], {"targetLanguage": "fr", "translations": translations}
+        )
+        self.assertTrue(calls[1]["url"].endswith("/integration/content/export"))
+        self.assertEqual(
+            calls[1]["params"], {"targetLanguages[]": ["fr", "de"], "tags[]": ["ui"]}
+        )
+
+    def test_billing_paths_and_bracket_params(self):
+        self.ollang.billing.credits()
+        self.ollang.billing.consumption(page=2, from_="2026-01-01", provider="deepl")
+        calls = self.session.calls
+        self.assertTrue(calls[0]["url"].endswith("/integration/credits"))
+        self.assertTrue(calls[1]["url"].endswith("/integration/consumption"))
+        self.assertEqual(
+            calls[1]["params"],
+            {
+                "pageOptions[page]": 2,
+                "filter[from]": "2026-01-01",
+                "filter[provider]": "deepl",
+            },
+        )
+
+    def test_locales(self):
+        self.ollang.locales.languages()
+        self.ollang.locales.search("portu")
+        self.ollang.locales.validate("pt-PT")
+        calls = self.session.calls
+        self.assertTrue(calls[0]["url"].endswith("/integration/locales/languages"))
+        self.assertEqual(calls[1]["params"], {"q": "portu"})
+        self.assertTrue(calls[2]["url"].endswith("/integration/locales/validate/pt-PT"))
+
+    def test_locales_validate_escapes_tag(self):
+        self.ollang.locales.validate("pt/PT")
+        self.assertTrue(
+            self.session.calls[0]["url"].endswith("/integration/locales/validate/pt%2FPT")
+        )
+
+    def test_figma(self):
+        self.ollang.figma.create_order(
+            file_key="abc",
+            file_url="https://figma.com/file/abc",
+            source_language="en",
+            target_languages=["fr"],
+            folder_id="f1",
+        )
+        self.ollang.figma.list_orders("abc")
+        self.ollang.figma.order_status("o1")
+        calls = self.session.calls
+        self.assertTrue(calls[0]["url"].endswith("/integration/orders/figma/create"))
+        self.assertEqual(calls[0]["json"]["fileKey"], "abc")
+        self.assertEqual(calls[0]["json"]["folderId"], "f1")
+        self.assertEqual(calls[1]["params"], {"fileKey": "abc"})
+        self.assertTrue(
+            calls[2]["url"].endswith("/integration/orders/figma/o1/status")
+        )
+
+
+class UrlBasedCreationTests(unittest.TestCase):
+    def setUp(self):
+        self.session = FakeSession()
+        self.ollang = make_client(self.session)
+
+    def test_project_create_by_url(self):
+        self.ollang.projects.create_by_url(
+            url="https://example.com/a.mp4",
+            name="a.mp4",
+            source_language="en",
+            notes=[{"details": "intro", "timeStamp": "00:00:01"}],
+        )
+        call = self.session.calls[0]
+        self.assertTrue(call["url"].endswith("/integration/project/create-by-url"))
+        self.assertEqual(call["json"]["url"], "https://example.com/a.mp4")
+        self.assertEqual(call["json"]["notes"][0]["details"], "intro")
+
+    def test_upload_direct_url(self):
+        self.ollang.uploads.direct_url(
+            url="https://example.com/a.mp4",
+            name="a.mp4",
+            size=1234,
+            source_language="en",
+        )
+        call = self.session.calls[0]
+        self.assertTrue(call["url"].endswith("/integration/upload/direct-url"))
+        self.assertEqual(
+            call["json"],
+            {
+                "url": "https://example.com/a.mp4",
+                "originalname": "a.mp4",
+                "size": 1234,
+                "sourceLanguage": "en",
+            },
+        )
 
 
 if __name__ == "__main__":

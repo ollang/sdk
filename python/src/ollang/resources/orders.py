@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Optional
 
 from .._client import OllangClient
+from ._files import PathInput, save_bytes
 
 
 class Orders:
@@ -19,6 +20,9 @@ class Orders:
         content: Optional[str] = None,
         order_sub_type: Optional[str] = None,
         dubbing_style: Optional[str] = None,
+        callback_url: Optional[str] = None,
+        auto_qc: Optional[bool] = None,
+        selected_memories: Optional[List[str]] = None,
         **extra: Any,
     ) -> List[Dict[str, Any]]:
         """Create one or more orders.
@@ -27,6 +31,10 @@ class Orders:
         ``aiDubbing``, ``studioDubbing``, ``proofreading``, ``other`` or
         ``revision``. Each entry of ``target_language_configs`` looks like
         ``{"language": "fr", "isRush": False}``.
+
+        ``selected_memories`` takes translation memory IDs from
+        ``client.memories.list()``. ``callback_url`` receives a webhook when the
+        order finishes, and ``auto_qc`` runs QC automatically on completion.
 
         Returns the raw API response: a list of ``{"orderId": ..., "orderType": ...}``
         entries (some order types create more than one order).
@@ -46,6 +54,12 @@ class Orders:
             body["orderSubType"] = order_sub_type
         if dubbing_style is not None:
             body["dubbingStyle"] = dubbing_style
+        if callback_url is not None:
+            body["callbackUrl"] = callback_url
+        if auto_qc is not None:
+            body["autoQc"] = auto_qc
+        if selected_memories is not None:
+            body["selectedMemories"] = selected_memories
         body.update(extra)
 
         return self._client.post("/integration/orders/create", json=body)
@@ -117,3 +131,32 @@ class Orders:
     def rerun(self, order_id: str, free_re_run: Optional[bool] = None) -> Dict[str, Any]:
         body = {"freeReRun": free_re_run} if free_re_run is not None else None
         return self._client.post(f"/integration/orders/{order_id}/rerun", json=body)
+
+    def cancel_human_review(self, order_id: str) -> Any:
+        """Cancel a human review previously requested for an order."""
+        return self._client.post(f"/integration/orders/{order_id}/cancel-human-review")
+
+    def request_subtitle_embedding(self, order_id: str) -> Any:
+        """Request a video with the finished subtitles burned in."""
+        return self._client.post(f"/integration/orders/{order_id}/subtitle-embedding")
+
+    def review_info(self, order_id: str) -> Dict[str, Any]:
+        """Inspect the review gate an order is paused at, if any.
+
+        Reports which team tag owns the gate, the review type, when the order
+        entered review, and who can clear it. Useful when an order sits in the
+        ``review`` status.
+        """
+        return self._client.get(f"/integration/orders/{order_id}/review/info")
+
+    def export_xlsx(self, order_id: str) -> bytes:
+        """Export an order's timestamps, transcriptions and translations as XLSX.
+
+        Returns the raw file bytes. Use :meth:`export_xlsx_to_file` to write
+        them straight to disk.
+        """
+        return self._client.get_bytes(f"/integration/orders/{order_id}/export-xlsx")
+
+    def export_xlsx_to_file(self, order_id: str, path: PathInput) -> str:
+        """Export an order as XLSX and save the workbook to ``path``."""
+        return save_bytes(self.export_xlsx(order_id), path)

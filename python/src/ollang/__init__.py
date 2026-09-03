@@ -6,15 +6,31 @@ Usage:
 
     client = Ollang(api_key="your-api-key")
     projects = client.projects.list()
+
+Resources: ``orders``, ``projects``, ``folders``, ``revisions``, ``uploads``,
+``memories``, ``custom_instructions``, ``content``, ``billing``, ``locales``
+and ``figma``.
 """
 
 from typing import Any, Dict, Optional
 
 from ._client import DEFAULT_BASE_URL, OllangClient
 from ._exceptions import OllangAPIError, OllangError
-from .resources import CustomInstructions, Orders, Projects, Revisions, Uploads
+from .resources import (
+    Billing,
+    Content,
+    CustomInstructions,
+    Figma,
+    Folders,
+    Locales,
+    Memories,
+    Orders,
+    Projects,
+    Revisions,
+    Uploads,
+)
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 __all__ = [
     "Ollang",
@@ -49,6 +65,12 @@ class Ollang:
         self.revisions = Revisions(self._client)
         self.uploads = Uploads(self._client)
         self.custom_instructions = CustomInstructions(self._client)
+        self.memories = Memories(self._client)
+        self.folders = Folders(self._client)
+        self.content = Content(self._client)
+        self.billing = Billing(self._client)
+        self.locales = Locales(self._client)
+        self.figma = Figma(self._client)
 
     def health_check(self) -> Dict[str, Any]:
         return self._client.get("/health")

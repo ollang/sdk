@@ -44,13 +44,19 @@ Get your API key from your project settings at [Olabs](https://lab.ollang.com).
 
 ## Resources
 
-| Resource                     | Description                            |
-| ---------------------------- | -------------------------------------- |
-| `client.projects`            | Read and list projects                 |
-| `client.uploads`             | Upload files (video, audio, documents) |
-| `client.orders`              | Create and track translation orders    |
-| `client.revisions`           | Request revisions on completed orders  |
-| `client.custom_instructions` | Set custom translation instructions    |
+| Resource                     | Description                                        |
+| ---------------------------- | -------------------------------------------------- |
+| `client.projects`            | Create, read and list projects                     |
+| `client.uploads`             | Upload files, or register remote ones by URL       |
+| `client.orders`              | Create, track, review and export orders            |
+| `client.folders`             | Browse folders and act on all their orders at once |
+| `client.revisions`           | Request revisions on completed orders              |
+| `client.memories`            | Translation memories and their items               |
+| `client.custom_instructions` | Set custom translation instructions                |
+| `client.content`             | Import and export translation units                |
+| `client.billing`             | Credit wallet and consumption history              |
+| `client.locales`             | Resolve and validate language codes                |
+| `client.figma`               | Import Figma files and track their orders          |
 
 All methods return the parsed JSON response as plain dicts/lists. Non-2xx
 responses raise `ollang.OllangAPIError`, which carries `status_code` and the
@@ -78,8 +84,54 @@ client.custom_instructions.create(
     value="Formal, brand-safe tone for all marketing content",
 )
 
+# Resolve a language code before using it
+matches = client.locales.search("portu")
+check = client.locales.validate("pt-PT")
+
+# Translation memories
+memory = client.memories.create("Brand terms")
+job = client.memories.import_items(
+    memory["id"],
+    [
+        {
+            "sourceLanguage": "en",
+            "targetLanguage": "fr",
+            "sourceText": "Sign in",
+            "targetText": "Se connecter",
+        }
+    ],
+)
+print(client.memories.get_import_job(job["jobId"])["status"])
+
+# Assign a translator to every French order in a folder
+client.folders.assign_translator("FOLDER_ID", translator_id="TRANSLATOR_ID", target_language="fr")
+
+# Credit balance and recent consumption
+wallet = client.billing.credits()
+usage = client.billing.consumption(page=1, take=20, from_="2026-01-01")
+
+# Import a large remote file without streaming it through your process
+project = client.projects.create_by_url(
+    url="https://example.com/video.mp4",
+    name="Launch video",
+    source_language="en",
+)
+
 # Endpoints not wrapped yet? Use the underlying HTTP client:
-languages = client.client.get("/integration/supported-languages")
+raw = client.client.get("/integration/orders")
+```
+
+### Binary exports
+
+The XLSX endpoints return raw `bytes` rather than JSON. Each has a
+`..._to_file` companion that writes the workbook to a path, creating parent
+directories as needed:
+
+```python
+data = client.orders.export_xlsx("ORDER_ID")
+
+client.orders.export_xlsx_to_file("ORDER_ID", "out/order.xlsx")
+client.folders.export_xlsx_to_file(["FOLDER_ID"], ["fr", "de"], "out/folders.xlsx")
 ```
 
 ## Configuration

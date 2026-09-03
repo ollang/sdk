@@ -1,5 +1,10 @@
 import { OllangClient } from '../client';
-import { Project, ListProjectsParams, ProjectsListResponse } from '../types';
+import {
+  CreateProjectByUrlParams,
+  ListProjectsParams,
+  Project,
+  ProjectsListResponse,
+} from '../types';
 
 export class Projects {
   constructor(private client: OllangClient) {}
@@ -21,5 +26,16 @@ export class Projects {
     }
 
     return this.client.get<ProjectsListResponse>('/integration/project', queryParams);
+  }
+
+  /**
+   * Creates a project from a file the platform fetches itself.
+   *
+   * The file at `url` is downloaded server-side, so its bytes never pass
+   * through your process. Prefer this over `uploads.direct` for large remote
+   * files.
+   */
+  async createByUrl(params: CreateProjectByUrlParams): Promise<Project> {
+    return this.client.post<Project>('/integration/project/create-by-url', params);
   }
 }

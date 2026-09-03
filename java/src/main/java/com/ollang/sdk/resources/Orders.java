@@ -3,6 +3,10 @@ package com.ollang.sdk.resources;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.ollang.sdk.OllangClient;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -64,6 +68,50 @@ public class Orders {
 
   public JsonElement rerun(String orderId, JsonObject params) {
     return client.post("/integration/orders/" + orderId + "/rerun", params);
+  }
+
+  /** Cancels a human review previously requested for an order. */
+  public JsonElement cancelHumanReview(String orderId) {
+    return client.post("/integration/orders/" + orderId + "/cancel-human-review", null);
+  }
+
+  /** Requests a video with the finished subtitles burned in. */
+  public JsonElement requestSubtitleEmbedding(String orderId) {
+    return client.post("/integration/orders/" + orderId + "/subtitle-embedding", null);
+  }
+
+  /**
+   * Inspects the review gate an order is paused at, if any.
+   *
+   * <p>Reports which team tag owns the gate, the review type, when the order entered review, and
+   * who can clear it. Useful when an order sits in the {@code review} status.
+   */
+  public JsonElement reviewInfo(String orderId) {
+    return client.get("/integration/orders/" + orderId + "/review/info");
+  }
+
+  /**
+   * Exports an order's timestamps, transcriptions and translations as XLSX.
+   *
+   * @return the raw file bytes; use {@link #exportXlsxToFile} to write them straight to disk
+   */
+  public byte[] exportXlsx(String orderId) {
+    return client.getBytes("/integration/orders/" + orderId + "/export-xlsx");
+  }
+
+  /** Exports an order as XLSX and saves the workbook to {@code path}. */
+  public Path exportXlsxToFile(String orderId, Path path) {
+    byte[] data = exportXlsx(orderId);
+    try {
+      Path parent = path.getParent();
+      if (parent != null) {
+        Files.createDirectories(parent);
+      }
+      Files.write(path, data);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Could not write XLSX export to " + path, e);
+    }
+    return path;
   }
 
   /** Pagination and filter options for {@link #list(ListOptions)}. */

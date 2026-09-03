@@ -63,3 +63,27 @@ class Uploads:
         finally:
             if isinstance(file, (str, os.PathLike)):
                 fileobj.close()
+
+    def direct_url(
+        self,
+        url: str,
+        name: str,
+        size: int,
+        source_language: str,
+        folder_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Register a remote file, which the platform fetches server-side.
+
+        Unlike :meth:`direct`, the bytes never pass through your process, so
+        this has no practical file-size ceiling. ``size`` is the file's size in
+        bytes, and ``url`` must be a direct link such as an S3 presigned URL.
+        """
+        body: Dict[str, Any] = {
+            "url": url,
+            "originalname": name,
+            "size": size,
+            "sourceLanguage": source_language,
+        }
+        if folder_id is not None:
+            body["folderId"] = folder_id
+        return self._client.post("/integration/upload/direct-url", json=body)

@@ -2,6 +2,7 @@ package com.ollang.sdk.resources;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.ollang.sdk.MultipartBody;
 import com.ollang.sdk.OllangClient;
 import java.io.IOException;
@@ -107,5 +108,30 @@ public class Uploads {
       type = URLConnection.guessContentTypeFromName(filename);
     }
     return type; // null falls back to application/octet-stream in MultipartBody
+  }
+
+  /**
+   * Registers a remote file, which the platform fetches server-side.
+   *
+   * <p>Unlike {@link #direct(Path, String, String)}, the bytes never pass through your process,
+   * so this has no practical file-size ceiling. {@code size} is the file's size in bytes, and
+   * {@code url} must be a direct link such as an S3 presigned URL.
+   */
+  public JsonElement directUrl(
+      String url, String name, long size, String sourceLanguage, String folderId) {
+    JsonObject body = new JsonObject();
+    body.addProperty("url", url);
+    body.addProperty("originalname", name);
+    body.addProperty("size", size);
+    body.addProperty("sourceLanguage", sourceLanguage);
+    if (folderId != null) {
+      body.addProperty("folderId", folderId);
+    }
+    return client.post("/integration/upload/direct-url", body);
+  }
+
+  /** Registers a remote file, which the platform fetches server-side. */
+  public JsonElement directUrl(String url, String name, long size, String sourceLanguage) {
+    return directUrl(url, name, size, sourceLanguage, null);
   }
 }

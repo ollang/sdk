@@ -56,15 +56,37 @@ npx @ollang-dev/sdk start
 
 ## Resources
 
-| Resource                    | Description                            |
-| --------------------------- | -------------------------------------- |
-| `ollang.projects`           | Create and manage projects             |
-| `ollang.uploads`            | Upload files (video, audio, documents) |
-| `ollang.orders`             | Create and track translation orders    |
-| `ollang.revisions`          | Request revisions on completed orders  |
-| `ollang.customInstructions` | Set custom translation instructions    |
-| `ollang.scans`              | Scan content for translatable text     |
-| `ollang.cms`                | CMS integration                        |
+| Resource                    | Description                                        |
+| --------------------------- | -------------------------------------------------- |
+| `ollang.projects`           | Create, read and list projects                     |
+| `ollang.uploads`            | Upload files, or register remote ones by URL       |
+| `ollang.orders`             | Create, track, review and export orders            |
+| `ollang.folders`            | Browse folders and act on all their orders at once |
+| `ollang.revisions`          | Request revisions on completed orders              |
+| `ollang.memories`           | Translation memories and their items               |
+| `ollang.customInstructions` | Set custom translation instructions                |
+| `ollang.content`            | Import and export translation units                |
+| `ollang.billing`            | Credit wallet and consumption history              |
+| `ollang.locales`            | Resolve and validate language codes                |
+| `ollang.figma`              | Import Figma files and track their orders          |
+| `ollang.scans`              | Scan content for translatable text                 |
+| `ollang.cms`                | CMS integration                                    |
+
+### Binary exports
+
+The XLSX endpoints resolve to a `Buffer` rather than JSON. Each has a
+`...ToFile` companion that writes the workbook to a path, creating parent
+directories as needed:
+
+```ts
+const bytes = await ollang.orders.exportXlsx('ORDER_ID');
+
+await ollang.orders.exportXlsxToFile('ORDER_ID', 'out/order.xlsx');
+await ollang.folders.exportXlsxToFile(
+  { folderIds: ['FOLDER_ID'], targetLanguages: ['fr', 'de'] },
+  'out/folders.xlsx'
+);
+```
 
 ## Documentation
 

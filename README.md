@@ -28,7 +28,8 @@ const ollang = new Ollang({ apiKey: process.env.OLLANG_API_KEY! });
 
 // Upload a source file. This creates the project for it.
 const upload = await ollang.uploads.direct({
-  file: new File([await readFile('./video.mp4')], 'video.mp4'),
+  file: new Blob([await readFile('./video.mp4')]),
+  filename: 'video.mp4',
   name: 'My Video',
   sourceLanguage: 'en',
 });
@@ -58,7 +59,13 @@ for (const doc of status.orderDocs ?? []) {
 
 `uploads.direct` sends the file under a real filename, and the platform takes
 the stored file's extension from it. A `File` carries its own name; a bare
-`Blob` does not, so pass `filename` alongside it:
+`Blob` does not, so pass `filename` alongside it.
+
+`Blob` with `filename` is the portable form. `File` is only a global from Node
+20 onwards, so `new File(...)` throws `ReferenceError: File is not defined` on
+Node 18 — and `node:buffer`'s `File` is not a substitute here, as it does not
+satisfy this parameter's type. A global `File` works fine where it exists, and
+supplies the name when `filename` is omitted.
 
 ```typescript
 await ollang.uploads.direct({

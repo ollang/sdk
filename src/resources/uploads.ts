@@ -7,12 +7,34 @@ import {
   UploadVttResponse,
 } from '../types';
 
+/**
+ * Picks the filename to send in the multipart part.
+ *
+ * The platform derives the stored file's extension from this name, so a part
+ * sent without one is stored extension-less and the document pipeline cannot
+ * process it. A `File` carries its own name; a bare `Blob` does not, which is
+ * why `filename` can be passed explicitly and why the display name is the last
+ * resort.
+ */
+function resolveFilename(file: File | Blob, explicit: string | undefined, fallback: string): string {
+  if (explicit) {
+    return explicit;
+  }
+
+  const name = (file as File).name;
+  if (typeof name === 'string' && name.length > 0) {
+    return name;
+  }
+
+  return fallback;
+}
+
 export class Uploads {
   constructor(private client: OllangClient) {}
 
   async direct(params: DirectUploadParams): Promise<DirectUploadResponse> {
     const formData = new FormData();
-    formData.append('file', params.file);
+    formData.append('file', params.file, resolveFilename(params.file, params.filename, params.name));
     formData.append('name', params.name);
     formData.append('sourceLanguage', params.sourceLanguage);
 
@@ -25,7 +47,11 @@ export class Uploads {
 
   async vtt(params: UploadVttParams): Promise<UploadVttResponse> {
     const formData = new FormData();
-    formData.append('file', params.file);
+    formData.append(
+      'file',
+      params.file,
+      resolveFilename(params.file, params.filename, 'subtitles.vtt')
+    );
     formData.append('orderId', params.orderId);
 
     return this.client.uploadFile<UploadVttResponse>('/integration/upload/vtt', formData);

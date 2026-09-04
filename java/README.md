@@ -56,6 +56,19 @@ System.out.println(status);
 
 Get your API key from your project settings at [Olabs](https://lab.ollang.com).
 
+### Naming the uploaded file
+
+The platform takes the stored file's extension from the name the file is sent
+under, and rejects an upload it cannot get one from. The `Path` overloads use
+the file's own name; the in-memory overload takes it as an argument:
+
+```java
+ollang.uploads().direct(bytes, "en.json", "App strings", "en", null);
+```
+
+The third argument is the display name for the created project; it does not
+need an extension of its own.
+
 ## Resources
 
 | Resource                      | Description                                          |

@@ -54,6 +54,123 @@ export interface CreateOrderParams {
   selectedMemories?: string[];
 }
 
+/**
+ * The kind of file an {@link OrderDocument} holds.
+ *
+ * Source documents are what you uploaded; `created_*` documents are what the
+ * pipeline produced and are the ones you normally download.
+ *
+ * The union is open: the listed values are what the platform documents today,
+ * and any other string still type-checks so a new document type does not break
+ * your build.
+ */
+export type DocType =
+  | 'source_video'
+  | 'source_accompaniment_audio'
+  | 'source_srt'
+  | 'source_document'
+  | 'created_source_vocals_only_audio'
+  | 'created_waveform'
+  | 'created_accompaniment_audio'
+  | 'created_ai_dub_audio'
+  | 'created_ai_dub_vocals_only_audio'
+  | 'created_embedded_video'
+  | 'created_subtitle_embedded_video'
+  | 'created_compressed_video'
+  | 'created_thumbnail'
+  | 'vendor_audio_with_background'
+  | 'vendor_audio_without_background'
+  | 'vendor_video'
+  | 'translator_document'
+  | 'invoice'
+  | 'guideline'
+  | 'character_list'
+  | 'guideline_glossary'
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  | (string & {});
+
+/**
+ * A file attached to an order — the source you uploaded, or a deliverable the
+ * pipeline produced.
+ *
+ * `url` is a signed, time-limited download link, so fetch it rather than
+ * storing it.
+ */
+export interface OrderDocument {
+  id: string;
+  name: string;
+  url: string;
+  type: DocType;
+  clientId: string;
+  createdAt: string;
+  updatedAt: string;
+  size?: number;
+  storageUrl?: string;
+  wordCount?: number;
+  /** Seconds, for audio and video documents. */
+  duration?: number;
+  sourceLanguage?: string;
+  waveformUrl?: string;
+  thumbnailUrl?: string;
+  projectId?: string;
+  orderId?: string;
+  folderId?: string;
+}
+
+export interface OrderFinance {
+  paymentAmount: number;
+}
+
+export interface OrderQcEvaluationScore {
+  name: string;
+  description: string;
+  value: number;
+}
+
+export interface OrderQcSegmentEvaluation {
+  id: string;
+  explain: string;
+  suggestedNewValue: string;
+}
+
+export interface OrderQcEvaluation {
+  id: string;
+  orderId: string;
+  createdAt: string;
+  textSummary?: string;
+  scores?: OrderQcEvaluationScore[];
+  segmentEvals?: OrderQcSegmentEvaluation[];
+  isLoading?: boolean;
+}
+
+export interface OrderComment {
+  id: string;
+  createdAt: string;
+  userId: string;
+  userName: string;
+  text: string;
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  status: 'approved' | 'requestEdits' | (string & {});
+}
+
+/**
+ * A milestone in an order's delivery history.
+ *
+ * Empty for orders that have not reached a milestone, and for orders created
+ * before delivery-event tracking — the log is not backfilled. The same type can
+ * appear more than once, for example on an LSP re-delivery or a rerun.
+ */
+export interface OrderDeliveryEvent {
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  type: 'ai_delivered' | 'translator_delivered' | 'lsp_approved' | 'order_delivered' | (string & {});
+  /** ISO 8601. */
+  occurredAt: string;
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  actorType: 'ai' | 'translator' | 'lsp' | 'system' | (string & {});
+  /** Null for `ai` and `system` events, and when the actor could not be resolved. */
+  actorId: string | null;
+}
+
 export interface Order {
   id: string;
   orderType: OrderType;
@@ -65,6 +182,33 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   status?: string;
+
+  // Fields the API fills in on `orders.get()` and `orders.list()`. They are
+  // optional because `orders.create()` returns the order before the platform
+  // has any of them.
+
+  /**
+   * The order type as the API reports it. `orderType` is the name
+   * `orders.create()` takes and echoes back; responses use `type`.
+   */
+  type?: OrderType;
+  name?: string;
+  sourceLanguage?: string;
+  targetLanguage?: string;
+  rate?: number;
+  folderId?: string;
+  /** Signed download link for the order's subtitles, when it has any. */
+  vttUrl?: string;
+  /**
+   * The order's files, including the finished deliverables. Each `url` is a
+   * signed download link.
+   */
+  orderDocs?: OrderDocument[];
+  finance?: OrderFinance;
+  qcEvaluation?: OrderQcEvaluation;
+  comments?: OrderComment[];
+  /** The order's delivery milestones, oldest first. */
+  deliveryEvents?: OrderDeliveryEvent[];
 }
 
 export interface ListOrdersParams {
@@ -171,7 +315,20 @@ export interface OrderNote {
 
 export interface DirectUploadParams {
   file: File | Blob;
+  /**
+   * Display name for the created project. The platform appends the uploaded
+   * file's extension to it, so it does not need one of its own.
+   */
   name: string;
+  /**
+   * Filename to send in the multipart part, e.g. `'en.json'`. The platform
+   * takes the stored file's extension from it.
+   *
+   * Only needed when `file` is a bare `Blob`, which carries no name of its
+   * own; a `File` supplies it. Without either, the upload is stored without a
+   * usable extension and the document pipeline rejects it.
+   */
+  filename?: string;
   sourceLanguage: string;
   notes?: OrderNote[];
 }
@@ -182,6 +339,8 @@ export interface DirectUploadResponse {
 
 export interface UploadVttParams {
   file: File | Blob;
+  /** Filename to send in the multipart part. Defaults to `'subtitles.vtt'`. */
+  filename?: string;
   orderId: string;
 }
 

@@ -7,14 +7,22 @@ from .._client import OllangClient
 FileInput = Union[str, os.PathLike, bytes, BinaryIO]
 
 
-def _as_file_tuple(file: FileInput, fallback_name: str):
-    """Normalize a path / bytes / file object into a (name, fileobj-or-bytes) tuple."""
+def _as_file_tuple(file: FileInput, fallback_name: str, filename: Optional[str] = None):
+    """Normalize a path / bytes / file object into a (name, fileobj-or-bytes) tuple.
+
+    The platform derives the stored file's extension from the multipart
+    filename, so the name matters: raw bytes and in-memory streams carry none of
+    their own, which is why ``filename`` can be passed explicitly and why the
+    display name is the last resort.
+    """
     if isinstance(file, (str, os.PathLike)):
         path = os.fspath(file)
-        return (os.path.basename(path), open(path, "rb"))
+        return (filename or os.path.basename(path), open(path, "rb"))
     if isinstance(file, bytes):
-        return (fallback_name, file)
+        return (filename or fallback_name, file)
     name = getattr(file, "name", None)
+    if filename:
+        return (filename, file)
     return (os.path.basename(name) if isinstance(name, str) else fallback_name, file)
 
 
@@ -30,34 +38,46 @@ class Uploads:
         name: str,
         source_language: str,
         notes: Optional[List[Dict[str, str]]] = None,
+        filename: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Upload a file directly, creating a project for it.
 
         ``file`` can be a filesystem path, raw bytes, or an open binary file
         object. ``notes`` entries look like
         ``{"details": "...", "timeStamp": "00:01:23"}``.
+
+        ``name`` is the display name for the created project; it does not need
+        an extension of its own. ``filename`` is the name the file is sent
+        under, e.g. ``"en.json"`` — the platform takes the stored file's
+        extension from it. A path supplies it; raw bytes and in-memory streams
+        do not, and the API rejects an upload it cannot get an extension for.
         """
-        filename, fileobj = _as_file_tuple(file, fallback_name=name)
+        part_name, fileobj = _as_file_tuple(file, fallback_name=name, filename=filename)
         data: Dict[str, Any] = {"name": name, "sourceLanguage": source_language}
         if notes is not None:
             data["notes"] = json.dumps(notes)
         try:
             return self._client.post_multipart(
                 "/integration/upload/direct",
-                files={"file": (filename, fileobj)},
+                files={"file": (part_name, fileobj)},
                 data=data,
             )
         finally:
             if isinstance(file, (str, os.PathLike)):
                 fileobj.close()
 
-    def vtt(self, file: FileInput, order_id: str) -> Dict[str, Any]:
+    def vtt(
+        self,
+        file: FileInput,
+        order_id: str,
+        filename: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """Upload a VTT subtitle file for an existing order."""
-        filename, fileobj = _as_file_tuple(file, fallback_name="subtitles.vtt")
+        part_name, fileobj = _as_file_tuple(file, fallback_name="subtitles.vtt", filename=filename)
         try:
             return self._client.post_multipart(
                 "/integration/upload/vtt",
-                files={"file": (filename, fileobj)},
+                files={"file": (part_name, fileobj)},
                 data={"orderId": order_id},
             )
         finally:

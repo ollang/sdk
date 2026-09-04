@@ -118,3 +118,45 @@ export type {
 } from './tms/index.js';
 
 export default Ollang;
+
+/*
+ * `export default` alone is not enough for `import Ollang from '@ollang-dev/sdk'`.
+ *
+ * This package compiles to CommonJS, and when Node's ESM loader imports a
+ * CommonJS module it binds `default` to `module.exports` — the namespace
+ * object — rather than honouring `exports.default`. So the default import
+ * resolved to an object and `new Ollang(...)` failed with "Ollang is not a
+ * constructor".
+ *
+ * Making `module.exports` the class itself, with every named export copied
+ * onto it, fixes the default import while leaving `import { Ollang }`,
+ * `require('@ollang-dev/sdk')` and `require('@ollang-dev/sdk').Ollang`
+ * working as before.
+ */
+declare const module: { exports: Record<string, unknown> } | undefined;
+
+if (typeof module !== 'undefined' && module.exports) {
+  const namedExports = module.exports;
+
+  for (const key of Object.keys(namedExports)) {
+    // Skip a function's own non-writable statics (`name`, `length`, ...).
+    if (Object.prototype.hasOwnProperty.call(Ollang, key)) continue;
+
+    Object.defineProperty(Ollang, key, {
+      value: namedExports[key],
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  Object.defineProperty(Ollang, 'default', {
+    value: Ollang,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+  Object.defineProperty(Ollang, '__esModule', { value: true });
+
+  module.exports = Ollang as unknown as Record<string, unknown>;
+}

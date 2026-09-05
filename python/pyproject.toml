@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ollang-sdk"
-version = "0.2.0"
+version = "0.2.1"
 description = "Official Python SDK for the Ollang API - Translation, Transcription, Dubbing, Closed Captioning, and I18n Management"
 readme = "README.md"
 license = { text = "MIT" }

@@ -70,21 +70,23 @@ public class Uploads {
     return client.postMultipart("/integration/upload/direct", withDirectFields(body, name, sourceLanguage, notes));
   }
 
-  /** Uploads a VTT subtitle file from disk for an existing order. The file is streamed. */
-  public JsonElement vtt(Path file, String orderId) {
+  /** Uploads a VTT subtitle file for a project. The file is streamed; language comes from the project. */
+  public JsonElement vtt(Path file, String projectId, String name) {
     MultipartBody body =
         new MultipartBody()
             .addFile("file", file.getFileName().toString(), file, "text/vtt")
-            .addField("orderId", orderId);
+            .addField("projectId", projectId)
+            .addField("name", name);
     return client.postMultipart("/integration/upload/vtt", body);
   }
 
-  /** Uploads in-memory VTT subtitle content for an existing order. */
-  public JsonElement vtt(byte[] content, String filename, String orderId) {
+  /** Uploads in-memory VTT subtitles for a project; language comes from the project. */
+  public JsonElement vtt(byte[] content, String filename, String projectId, String name) {
     MultipartBody body =
         new MultipartBody()
             .addFile("file", filename, content, "text/vtt")
-            .addField("orderId", orderId);
+            .addField("projectId", projectId)
+            .addField("name", name);
     return client.postMultipart("/integration/upload/vtt", body);
   }
 

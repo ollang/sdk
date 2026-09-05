@@ -1,4 +1,6 @@
 import { Ollang } from '../src/index';
+import { execFileSync } from 'node:child_process';
+import { resolve } from 'node:path';
 
 /**
  * These tests exercise the request each resource method builds — path, method,
@@ -10,6 +12,7 @@ interface RecordedCall {
   path: string;
   params?: any;
   data?: any;
+  formData?: FormData;
 }
 
 function makeClient(response: any = { ok: true }) {
@@ -40,6 +43,10 @@ function makeClient(response: any = { ok: true }) {
   client.postBuffer = jest.fn(async (path: string, data?: any) => {
     calls.push({ method: 'POST', path, data });
     return Buffer.from('xlsx-bytes');
+  });
+  client.uploadFile = jest.fn(async (path: string, formData: FormData) => {
+    calls.push({ method: 'POST', path, formData });
+    return response;
   });
 
   return { ollang, calls };
@@ -291,5 +298,138 @@ describe('url-based creation', () => {
       },
     });
     expect(calls[0].data.name).toBeUndefined();
+  });
+});
+
+describe('uploads', () => {
+  /** The filename the multipart part was sent under. */
+  const sentFilename = (call: RecordedCall) => (call.formData?.get('file') as File).name;
+
+  it('sends a bare Blob under the display name rather than "blob"', async () => {
+    const { ollang, calls } = makeClient();
+
+    await ollang.uploads.direct({
+      file: new Blob(['{}']),
+      name: 'en.json',
+      sourceLanguage: 'en',
+    });
+
+    expect(calls[0].path).toBe('/integration/upload/direct');
+    // A Blob has no name, so FormData would otherwise default to "blob" and
+    // the platform would store the upload as `<name>.blob`.
+    expect(sentFilename(calls[0])).toBe('en.json');
+  });
+
+  it("sends a File under the File's own name", async () => {
+    const { ollang, calls } = makeClient();
+
+    await ollang.uploads.direct({
+      file: new File(['{}'], 'en.json'),
+      name: 'strings',
+      sourceLanguage: 'en',
+    });
+
+    expect(sentFilename(calls[0])).toBe('en.json');
+  });
+
+  it('prefers an explicit filename over both', async () => {
+    const { ollang, calls } = makeClient();
+
+    await ollang.uploads.direct({
+      file: new File(['{}'], 'tmp-download'),
+      filename: 'en.json',
+      name: 'strings',
+      sourceLanguage: 'en',
+    });
+
+    expect(sentFilename(calls[0])).toBe('en.json');
+    expect(calls[0].formData?.get('name')).toBe('strings');
+  });
+
+  it('names the VTT part', async () => {
+    const { ollang, calls } = makeClient();
+
+    await ollang.uploads.vtt({ file: new Blob(['WEBVTT']), projectId: 'p1', name: 'Subtitles' });
+    await ollang.uploads.vtt({
+      file: new File(['WEBVTT'], 'fr.vtt'),
+      projectId: 'p1',
+      name: 'French',
+      sourceLanguage: 'fr',
+    });
+
+    expect(calls[0].path).toBe('/integration/upload/vtt');
+    expect(sentFilename(calls[0])).toBe('subtitles.vtt');
+    expect(sentFilename(calls[1])).toBe('fr.vtt');
+    expect(calls[0].formData?.get('projectId')).toBe('p1');
+    expect(calls[0].formData?.get('name')).toBe('Subtitles');
+    expect(calls[0].formData?.has('orderId')).toBe(false);
+    expect(calls[0].formData?.has('sourceLanguage')).toBe(false);
+    expect(calls[1].formData?.get('sourceLanguage')).toBe('fr');
+  });
+
+  it('returns the project identifier from a VTT upload', async () => {
+    const { ollang } = makeClient({ projectId: 'p1' });
+    const result = await ollang.uploads.vtt({
+      file: new Blob(['WEBVTT']),
+      projectId: 'p1',
+      name: 'Subtitles',
+    });
+    expect(result.projectId).toBe('p1');
+  });
+});
+
+describe('order evaluation response', () => {
+  it.each([null, { id: 'eval1', orderId: 'o1', createdAt: '2026-09-04T00:00:00Z' }])(
+    'exposes latestEvaluation as returned by the API: %j',
+    async (latestEvaluation) => {
+      const { ollang } = makeClient({ id: 'o1', latestEvaluation });
+      expect((await ollang.orders.get('o1')).latestEvaluation).toEqual(latestEvaluation);
+    }
+  );
+});
+
+describe('module shape', () => {
+  it('preserves default and named imports in the built package under native ESM', () => {
+    const cwd = resolve(__dirname, '..');
+    execFileSync(process.execPath, [require.resolve('typescript/bin/tsc')], { cwd });
+    execFileSync(
+      process.execPath,
+      [
+        '--input-type=module',
+        '-e',
+        `
+      import assert from 'node:assert/strict';
+      import Default, { Ollang, Scans, CMS, OllangBrowser, TranslationManagementSystem } from './dist/index.js';
+      assert.equal(Default, Ollang);
+      assert.ok(new Default({ apiKey: 'test' }));
+      for (const value of [Scans, CMS, OllangBrowser, TranslationManagementSystem]) {
+        assert.equal(typeof value, 'function');
+      }
+    `,
+      ],
+      { cwd }
+    );
+  }, 30000);
+  /**
+   * `import Ollang from '@ollang-dev/sdk'` used to throw "Ollang is not a
+   * constructor": Node binds a CommonJS module's default export to
+   * `module.exports`, which was the namespace object rather than the class.
+   */
+  it('exposes the class as the default export and as a named one', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const sdk = require('../src/index');
+
+    expect(typeof sdk).toBe('function');
+    expect(() => new sdk({ apiKey: 'k' })).not.toThrow();
+    expect(sdk.default).toBe(sdk);
+    expect(sdk.Ollang).toBe(sdk);
+  });
+
+  it('keeps the other named exports reachable', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const sdk = require('../src/index');
+
+    expect(typeof sdk.OllangBrowser).toBe('function');
+    expect(typeof sdk.TranslationManagementSystem).toBe('function');
   });
 });

@@ -129,6 +129,47 @@ class ClientTests(unittest.TestCase):
             [{"details": "intro", "timeStamp": "00:00:01"}],
         )
 
+    def test_upload_direct_names_the_part(self):
+        """The platform reads the stored file's extension from this name."""
+        # Raw bytes carry no name of their own.
+        self.ollang.uploads.direct(b"{}", name="App strings", source_language="en")
+        self.assertEqual(self.session.calls[0]["files"]["file"][0], "App strings")
+
+        # ...so an explicit filename is what gives the upload an extension.
+        self.ollang.uploads.direct(
+            b"{}", name="App strings", source_language="en", filename="en.json"
+        )
+        self.assertEqual(self.session.calls[1]["files"]["file"][0], "en.json")
+        self.assertEqual(self.session.calls[1]["data"]["name"], "App strings")
+
+    def test_upload_direct_uses_the_basename_of_a_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "en.json")
+            with open(path, "wb") as handle:
+                handle.write(b"{}")
+
+            self.ollang.uploads.direct(path, name="App strings", source_language="en")
+            self.assertEqual(self.session.calls[0]["files"]["file"][0], "en.json")
+
+            # An explicit filename still wins.
+            self.ollang.uploads.direct(
+                path, name="App strings", source_language="en", filename="strings.json"
+            )
+            self.assertEqual(self.session.calls[1]["files"]["file"][0], "strings.json")
+
+    def test_upload_vtt_names_the_part(self):
+        self.ollang.uploads.vtt(b"WEBVTT", project_id="p1", name="Subtitles")
+        self.assertEqual(self.session.calls[0]["files"]["file"][0], "subtitles.vtt")
+        self.assertEqual(self.session.calls[0]["data"], {"projectId": "p1", "name": "Subtitles"})
+
+        self.ollang.uploads.vtt(
+            b"WEBVTT", project_id="p1", name="French", filename="fr.vtt", source_language="fr"
+        )
+        self.assertEqual(self.session.calls[1]["files"]["file"][0], "fr.vtt")
+        self.assertEqual(
+            self.session.calls[1]["data"], {"projectId": "p1", "name": "French", "sourceLanguage": "fr"}
+        )
+
     def test_custom_instructions_update(self):
         self.ollang.custom_instructions.update("ci1", value="new value")
         call = self.session.calls[0]

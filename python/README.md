@@ -38,9 +38,44 @@ orders = client.orders.create(
 # Check order status
 status = client.orders.get(orders[0]["orderId"])
 print(status)
+
+# Download links, once the order completes
+for doc in status.get("orderDocs", []):
+    print(doc["type"], doc["name"], doc["url"])
 ```
 
 Get your API key from your project settings at [Olabs](https://lab.ollang.com).
+
+### Naming the uploaded file
+
+The platform takes the stored file's extension from the name the file is sent
+under, and rejects an upload it cannot get one from. A path supplies it; raw
+bytes and in-memory streams do not, so pass `filename` alongside them:
+
+```python
+client.uploads.direct(
+    json.dumps(strings).encode(),
+    name="App strings",
+    source_language="en",
+    filename="en.json",
+)
+```
+
+`name` is the display name for the created project; it does not need an
+extension of its own.
+
+### Uploading VTT subtitles
+
+Pass `project_id` and `name` instead of the old `order_id` argument. The API
+attaches subtitles to a project and returns `projectId`; source language
+defaults to the project's language.
+
+```python
+subtitles = client.uploads.vtt(
+    './subtitles.vtt', project_id=upload["projectId"], name="Subtitles"
+)
+print(subtitles["projectId"])
+```
 
 ## Resources
 

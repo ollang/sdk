@@ -12,14 +12,14 @@ Maven:
 <dependency>
   <groupId>com.ollang</groupId>
   <artifactId>ollang-sdk</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.ollang:ollang-sdk:0.2.0'
+implementation 'com.ollang:ollang-sdk:0.2.1'
 ```
 
 ## Quick Start
@@ -55,6 +55,30 @@ System.out.println(status);
 ```
 
 Get your API key from your project settings at [Olabs](https://lab.ollang.com).
+
+### Naming the uploaded file
+
+The platform takes the stored file's extension from the name the file is sent
+under, and rejects an upload it cannot get one from. The `Path` overloads use
+the file's own name; the in-memory overload takes it as an argument:
+
+```java
+ollang.uploads().direct(bytes, "en.json", "App strings", "en", null);
+```
+
+The third argument is the display name for the created project; it does not
+need an extension of its own.
+
+### Uploading VTT subtitles
+
+The VTT overloads take a source project ID and a display name, replacing the old
+order ID argument. Source language comes from the project; the response
+contains `projectId`.
+
+```java
+ollang.uploads().vtt(Path.of("subtitles.vtt"), projectId, "Subtitles");
+ollang.uploads().vtt(bytes, "subtitles.vtt", projectId, "Subtitles");
+```
 
 ## Resources
 

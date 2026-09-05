@@ -21,27 +21,92 @@ npm install @ollang-dev/sdk
 ## Quick Start
 
 ```typescript
-import Ollang from '@ollang-dev/sdk';
+import { readFile } from 'node:fs/promises';
+import { Ollang } from '@ollang-dev/sdk';
 
-const ollang = new Ollang({
-  apiKey: 'your-api-key',
-});
+const ollang = new Ollang({ apiKey: process.env.OLLANG_API_KEY! });
 
-// Create a project
-const project = await ollang.projects.create({ name: 'My Project' });
-
-// Upload a file
-const upload = await ollang.uploads.upload(project.id, './video.mp4');
-
-// Create an order
-const order = await ollang.orders.create({
-  projectId: project.id,
+// Upload a source file. This creates the project for it.
+const upload = await ollang.uploads.direct({
+  file: new Blob([await readFile('./video.mp4')]),
+  filename: 'video.mp4',
+  name: 'My Video',
   sourceLanguage: 'en',
-  targetLanguages: ['fr', 'de', 'es'],
 });
 
-// Check order status
+// Order translations off that project
+const order = await ollang.orders.create({
+  orderType: 'subtitle',
+  level: 0,
+  projectId: upload.projectId,
+  targetLanguageConfigs: [
+    { language: 'fr', isRush: false },
+    { language: 'de', isRush: false },
+  ],
+});
+
+// Check order status, and collect the deliverables once it completes
 const status = await ollang.orders.get(order.id);
+for (const doc of status.orderDocs ?? []) {
+  console.log(doc.type, doc.name, doc.url);
+}
+```
+
+`Ollang` is a named export. It is also the default export, so
+`import Ollang from '@ollang-dev/sdk'` works too.
+
+### Naming the uploaded file
+
+`uploads.direct` sends the file under a real filename, and the platform takes
+the stored file's extension from it. A `File` carries its own name; a bare
+`Blob` does not, so pass `filename` alongside it.
+
+`Blob` with `filename` is the portable form. `File` is only a global from Node
+20 onwards, so `new File(...)` throws `ReferenceError: File is not defined` on
+Node 18 — and `node:buffer`'s `File` is not a substitute here, as it does not
+satisfy this parameter's type. A global `File` works fine where it exists, and
+supplies the name when `filename` is omitted.
+
+```typescript
+await ollang.uploads.direct({
+  file: new Blob([JSON.stringify(strings)]),
+  filename: 'en.json',
+  name: 'App strings',
+  sourceLanguage: 'en',
+});
+```
+
+Without a name the upload has no usable extension, and the API rejects it
+rather than creating a project the document pipeline cannot process.
+
+`name` is the display name for the project; it does not need an extension of
+its own.
+
+For files too large to hold in memory, register them by URL instead — the
+platform fetches the bytes server-side:
+
+```typescript
+const upload = await ollang.uploads.directUrl({
+  url: presignedS3Url,
+  name: 'feature.mp4',
+  size: bytes,
+  sourceLanguage: 'en',
+});
+```
+
+### Uploading VTT subtitles
+
+Pass the source `projectId` returned by the upload and a `name`, rather than an
+order ID. The response contains `projectId`. Source language defaults to the
+project's language; Node and Python also accept an explicit override.
+
+```typescript
+const subtitles = await ollang.uploads.vtt({
+  file: new Blob([await readFile('./subtitles.vtt')]),
+  projectId: upload.projectId,
+  name: 'Subtitles',
+});
+console.log(subtitles.projectId);
 ```
 
 ## Ollang SDK (BETA)

@@ -69,16 +69,21 @@ class Uploads:
     def vtt(
         self,
         file: FileInput,
-        order_id: str,
+        project_id: str,
+        name: str,
         filename: Optional[str] = None,
+        source_language: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Upload a VTT subtitle file for an existing order."""
+        """Upload VTT subtitles for a project; source language defaults to the project's."""
         part_name, fileobj = _as_file_tuple(file, fallback_name="subtitles.vtt", filename=filename)
+        data = {"projectId": project_id, "name": name}
+        if source_language is not None:
+            data["sourceLanguage"] = source_language
         try:
             return self._client.post_multipart(
                 "/integration/upload/vtt",
                 files={"file": (part_name, fileobj)},
-                data={"orderId": order_id},
+                data=data,
             )
         finally:
             if isinstance(file, (str, os.PathLike)):

@@ -158,11 +158,17 @@ class ClientTests(unittest.TestCase):
             self.assertEqual(self.session.calls[1]["files"]["file"][0], "strings.json")
 
     def test_upload_vtt_names_the_part(self):
-        self.ollang.uploads.vtt(b"WEBVTT", order_id="o1")
+        self.ollang.uploads.vtt(b"WEBVTT", project_id="p1", name="Subtitles")
         self.assertEqual(self.session.calls[0]["files"]["file"][0], "subtitles.vtt")
+        self.assertEqual(self.session.calls[0]["data"], {"projectId": "p1", "name": "Subtitles"})
 
-        self.ollang.uploads.vtt(b"WEBVTT", order_id="o1", filename="fr.vtt")
+        self.ollang.uploads.vtt(
+            b"WEBVTT", project_id="p1", name="French", filename="fr.vtt", source_language="fr"
+        )
         self.assertEqual(self.session.calls[1]["files"]["file"][0], "fr.vtt")
+        self.assertEqual(
+            self.session.calls[1]["data"], {"projectId": "p1", "name": "French", "sourceLanguage": "fr"}
+        )
 
     def test_custom_instructions_update(self):
         self.ollang.custom_instructions.update("ci1", value="new value")

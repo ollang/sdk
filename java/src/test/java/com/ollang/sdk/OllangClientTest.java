@@ -2,6 +2,7 @@ package com.ollang.sdk;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -192,6 +193,25 @@ class OllangClientTest {
       int start = indexOf(raw, "\r\n\r\n".getBytes(StandardCharsets.US_ASCII), 0) + 4;
       byte[] received = java.util.Arrays.copyOfRange(raw, start, start + content.length);
       assertTrue(java.util.Arrays.equals(content, received));
+    } finally {
+      Files.deleteIfExists(file);
+    }
+  }
+
+  @Test
+  void uploadVttSendsProjectFieldsForBytesAndPaths() throws IOException {
+    Path file = Files.createTempFile("ollang-subtitles", ".vtt");
+    try {
+      Files.write(file, "WEBVTT".getBytes(StandardCharsets.UTF_8));
+      ollang.uploads().vtt("WEBVTT".getBytes(StandardCharsets.UTF_8), "subs.vtt", "p1", "Subtitles");
+      ollang.uploads().vtt(file, "p1", "Subtitles");
+      for (RecordedRequest request : requests) {
+        assertEquals("/integration/upload/vtt", request.path);
+        assertTrue(request.body.contains("name=\"projectId\"\r\n\r\np1"));
+        assertTrue(request.body.contains("name=\"name\"\r\n\r\nSubtitles"));
+        assertFalse(request.body.contains("name=\"orderId\""));
+        assertTrue(request.body.contains("WEBVTT"));
+      }
     } finally {
       Files.deleteIfExists(file);
     }

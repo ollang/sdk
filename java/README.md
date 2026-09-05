@@ -12,14 +12,14 @@ Maven:
 <dependency>
   <groupId>com.ollang</groupId>
   <artifactId>ollang-sdk</artifactId>
-  <version>0.2.0</version>
+  <version>0.2.1</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.ollang:ollang-sdk:0.2.0'
+implementation 'com.ollang:ollang-sdk:0.2.1'
 ```
 
 ## Quick Start
@@ -68,6 +68,17 @@ ollang.uploads().direct(bytes, "en.json", "App strings", "en", null);
 
 The third argument is the display name for the created project; it does not
 need an extension of its own.
+
+### Uploading VTT subtitles
+
+The VTT overloads take a source project ID and a display name, replacing the old
+order ID argument. Source language comes from the project; the response
+contains `projectId`.
+
+```java
+ollang.uploads().vtt(Path.of("subtitles.vtt"), projectId, "Subtitles");
+ollang.uploads().vtt(bytes, "subtitles.vtt", projectId, "Subtitles");
+```
 
 ## Resources
 

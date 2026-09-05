@@ -52,7 +52,11 @@ export class Uploads {
       params.file,
       resolveFilename(params.file, params.filename, 'subtitles.vtt')
     );
-    formData.append('orderId', params.orderId);
+    formData.append('projectId', params.projectId);
+    formData.append('name', params.name);
+    if (params.sourceLanguage !== undefined) {
+      formData.append('sourceLanguage', params.sourceLanguage);
+    }
 
     return this.client.uploadFile<UploadVttResponse>('/integration/upload/vtt', formData);
   }

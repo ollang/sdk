@@ -81,6 +81,8 @@ export class Ollang {
 export * from './types';
 export * from './resources/scans';
 export * from './resources/cms';
+// Explicit exports keep these names discoverable by Node's native ESM loader.
+export { Scans, CMS };
 
 export { OllangBrowser, OllangBrowserConfig, CapturedContent } from './browser';
 

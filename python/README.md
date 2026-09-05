@@ -64,6 +64,19 @@ client.uploads.direct(
 `name` is the display name for the created project; it does not need an
 extension of its own.
 
+### Uploading VTT subtitles
+
+Pass `project_id` and `name` instead of the old `order_id` argument. The API
+attaches subtitles to a project and returns `projectId`; source language
+defaults to the project's language.
+
+```python
+subtitles = client.uploads.vtt(
+    './subtitles.vtt', project_id=upload["projectId"], name="Subtitles"
+)
+print(subtitles["projectId"])
+```
+
 ## Resources
 
 | Resource                     | Description                                        |

@@ -205,7 +205,7 @@ export interface Order {
    */
   orderDocs?: OrderDocument[];
   finance?: OrderFinance;
-  qcEvaluation?: OrderQcEvaluation;
+  latestEvaluation?: OrderQcEvaluation | null;
   comments?: OrderComment[];
   /** The order's delivery milestones, oldest first. */
   deliveryEvents?: OrderDeliveryEvent[];
@@ -341,12 +341,14 @@ export interface UploadVttParams {
   file: File | Blob;
   /** Filename to send in the multipart part. Defaults to `'subtitles.vtt'`. */
   filename?: string;
-  orderId: string;
+  projectId: string;
+  name: string;
+  /** Defaults to the project's source language. */
+  sourceLanguage?: string;
 }
 
 export interface UploadVttResponse {
-  success: boolean;
-  message?: string;
+  projectId: string;
 }
 
 export interface CreateCustomInstructionParams {

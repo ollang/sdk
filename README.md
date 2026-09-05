@@ -94,6 +94,21 @@ const upload = await ollang.uploads.directUrl({
 });
 ```
 
+### Uploading VTT subtitles
+
+Pass the source `projectId` returned by the upload and a `name`, rather than an
+order ID. The response contains `projectId`. Source language defaults to the
+project's language; Node and Python also accept an explicit override.
+
+```typescript
+const subtitles = await ollang.uploads.vtt({
+  file: new Blob([await readFile('./subtitles.vtt')]),
+  projectId: upload.projectId,
+  name: 'Subtitles',
+});
+console.log(subtitles.projectId);
+```
+
 ## Ollang SDK (BETA)
 
 > **Note:** Ollang SDK is currently in **BETA**. Features and APIs may change.

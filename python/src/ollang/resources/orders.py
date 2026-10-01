@@ -128,9 +128,18 @@ class Orders:
 
         return self._client.post(f"/integration/orders/{order_id}/qc", json=body or None)
 
-    def rerun(self, order_id: str, free_re_run: Optional[bool] = None) -> Dict[str, Any]:
-        body = {"freeReRun": free_re_run} if free_re_run is not None else None
-        return self._client.post(f"/integration/orders/{order_id}/rerun", json=body)
+    def rerun(
+        self,
+        order_id: str,
+        free_re_run: Optional[bool] = None,
+        trigger_full_chain: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        body: Dict[str, Any] = {}
+        if free_re_run is not None:
+            body["freeReRun"] = free_re_run
+        if trigger_full_chain is not None:
+            body["triggerFullChain"] = trigger_full_chain
+        return self._client.post(f"/integration/orders/{order_id}/rerun", json=body or None)
 
     def cancel_human_review(self, order_id: str) -> Any:
         """Cancel a human review previously requested for an order."""

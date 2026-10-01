@@ -185,6 +185,28 @@ describe('order extras', () => {
       path: '/integration/orders/o1/export-xlsx',
     });
   });
+
+  it('serializes rerun params including triggerFullChain', async () => {
+    const { ollang, calls } = makeClient({
+      success: true,
+      triggerFullChain: true,
+      triggeredOrderIds: ['o1', 'o2'],
+    });
+
+    await ollang.orders.rerun('o1');
+    await ollang.orders.rerun('o1', { freeReRun: true });
+    const res = await ollang.orders.rerun('o1', { triggerFullChain: true });
+
+    expect(calls[0]).toMatchObject({
+      method: 'POST',
+      path: '/integration/orders/o1/rerun',
+      data: undefined,
+    });
+    expect(calls[1].data).toMatchObject({ freeReRun: true });
+    expect(calls[2].data).toMatchObject({ triggerFullChain: true });
+    expect(res.triggerFullChain).toBe(true);
+    expect(res.triggeredOrderIds).toEqual(['o1', 'o2']);
+  });
 });
 
 describe('content, billing, locales and figma', () => {

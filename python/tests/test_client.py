@@ -90,6 +90,25 @@ class ClientTests(unittest.TestCase):
         )
         self.assertEqual(result, [{"orderId": "o1"}])
 
+    def test_orders_rerun_body(self):
+        self.ollang.orders.rerun("o1")
+        self.assertIsNone(self.session.calls[0]["json"])
+
+        self.ollang.orders.rerun("o1", free_re_run=True)
+        self.assertEqual(self.session.calls[1]["json"], {"freeReRun": True})
+
+        self.ollang.orders.rerun("o1", trigger_full_chain=True)
+        self.assertEqual(self.session.calls[2]["json"], {"triggerFullChain": True})
+
+        self.ollang.orders.rerun("o1", free_re_run=False, trigger_full_chain=True)
+        self.assertEqual(
+            self.session.calls[3]["json"],
+            {"freeReRun": False, "triggerFullChain": True},
+        )
+        for call in self.session.calls:
+            self.assertEqual(call["method"], "POST")
+            self.assertTrue(call["url"].endswith("/integration/orders/o1/rerun"))
+
     def test_orders_list_params(self):
         self.ollang.orders.list(page=2, take=10, status="completed", project_id="p1")
         call = self.session.calls[0]

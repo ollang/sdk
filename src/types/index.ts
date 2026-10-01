@@ -258,12 +258,20 @@ export interface RunQcEvaluationResponse {
 
 export interface RerunOrderParams {
   freeReRun?: boolean;
+  /**
+   * If true, resets and reruns the complete connected order chain
+   * (dependent stages are regenerated first, in sequence) instead of
+   * only this order. Defaults to false.
+   */
+  triggerFullChain?: boolean;
 }
 
 export interface RerunOrderResponse {
   success: boolean;
   message: string;
   orderId?: string;
+  triggerFullChain?: boolean;
+  triggeredOrderIds?: string[];
 }
 
 export interface DocEntity {

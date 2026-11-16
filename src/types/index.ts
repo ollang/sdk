@@ -55,6 +55,20 @@ export interface CreateOrderParams {
 }
 
 /**
+ * One order created by `orders.createAll()`.
+ *
+ * A single create request can produce several orders: one per target language,
+ * and some order types (such as `aiDubbing`) also create the orders they depend
+ * on. Use `orderType` to tell them apart; the API does not guarantee their order.
+ */
+export interface CreatedOrder {
+  orderId: string;
+  /** The created order's type, when the API reports it. */
+  // eslint-disable-next-line @typescript-eslint/ban-types
+  orderType?: OrderType | (string & {});
+}
+
+/**
  * The kind of file an {@link OrderDocument} holds.
  *
  * Source documents are what you uploaded; `created_*` documents are what the

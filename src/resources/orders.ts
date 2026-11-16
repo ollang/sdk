@@ -2,6 +2,7 @@ import { OllangClient } from '../client';
 import {
   Order,
   CreateOrderParams,
+  CreatedOrder,
   ListOrdersParams,
   OrderReviewInfo,
   OrdersListResponse,
@@ -15,15 +16,17 @@ import { saveBuffer } from './_files';
 export class Orders {
   constructor(private client: OllangClient) {}
 
+  /**
+   * Creates orders and returns a single one of them.
+   *
+   * A request can create several orders — one per entry in
+   * `targetLanguageConfigs`, plus any prerequisite orders the order type needs —
+   * but this method returns only one: for `aiDubbing` and `subtitle`, the order
+   * of the requested type; otherwise the first order the API returns. Use
+   * {@link createAll} to get every created order.
+   */
   async create(params: CreateOrderParams): Promise<Order> {
-    const response = await this.client.post<Array<{ orderId: string; orderType?: string }>>(
-      '/integration/orders/create',
-      params
-    );
-
-    if (!response || response.length === 0) {
-      throw new Error('No order ID returned from API');
-    }
+    const response = await this.postCreate(params);
 
     let orderId = response[0].orderId;
 
@@ -53,6 +56,28 @@ export class Orders {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     } as Order;
+  }
+
+  /**
+   * Creates orders and returns every order the request created.
+   *
+   * One request can create several orders: one per entry in
+   * `targetLanguageConfigs`, and some order types (such as `aiDubbing`) also
+   * create the orders they depend on. The list is not in any guaranteed order;
+   * use each entry's `orderType` to tell them apart.
+   */
+  async createAll(params: CreateOrderParams): Promise<CreatedOrder[]> {
+    return this.postCreate(params);
+  }
+
+  private async postCreate(params: CreateOrderParams): Promise<CreatedOrder[]> {
+    const response = await this.client.post<CreatedOrder[]>('/integration/orders/create', params);
+
+    if (!response || response.length === 0) {
+      throw new Error('No order ID returned from API');
+    }
+
+    return response;
   }
 
   async list(params?: ListOrdersParams): Promise<OrdersListResponse> {

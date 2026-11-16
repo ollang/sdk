@@ -34,8 +34,10 @@ const upload = await ollang.uploads.direct({
   sourceLanguage: 'en',
 });
 
-// Order translations off that project
-const order = await ollang.orders.create({
+// Order translations off that project. This can create more than one order
+// (one per target language, plus any prerequisites), so use createAll to get
+// every one of them.
+const orders = await ollang.orders.createAll({
   orderType: 'subtitle',
   level: 0,
   projectId: upload.projectId,
@@ -45,12 +47,27 @@ const order = await ollang.orders.create({
   ],
 });
 
-// Check order status, and collect the deliverables once it completes
-const status = await ollang.orders.get(order.id);
-for (const doc of status.orderDocs ?? []) {
-  console.log(doc.type, doc.name, doc.url);
+// Check each order's status, and collect the deliverables once it completes
+for (const { orderId } of orders) {
+  const order = await ollang.orders.get(orderId);
+  for (const doc of order.orderDocs ?? []) {
+    console.log(order.targetLanguage, doc.type, doc.name, doc.url);
+  }
 }
 ```
+
+### Creating orders
+
+A single order-creation request can create several orders: one per entry in
+`targetLanguageConfigs`, and some order types also create the orders they
+depend on (`aiDubbing`, for example, creates its caption and subtitle orders
+too). The created orders come back in no guaranteed order.
+
+- `orders.createAll(params)` returns every created order as
+  `{ orderId, orderType }`.
+- `orders.create(params)` returns a single `Order`: the one of the requested
+  type for `aiDubbing` and `subtitle`, otherwise the first one created. Prefer
+  `createAll` whenever a request can create more than one order.
 
 `Ollang` is a named export. It is also the default export, so
 `import Ollang from '@ollang-dev/sdk'` works too.

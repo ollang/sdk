@@ -158,6 +158,73 @@ describe('folders', () => {
   });
 });
 
+describe('order creation', () => {
+  const params = {
+    orderType: 'aiDubbing' as const,
+    level: 0,
+    projectId: 'p1',
+    targetLanguageConfigs: [
+      { language: 'fr', isRush: false },
+      { language: 'de', isRush: false },
+    ],
+  };
+  const created = [
+    { orderId: 'o-cc', orderType: 'cc' },
+    { orderId: 'o-dub-fr', orderType: 'aiDubbing' },
+    { orderId: 'o-sub', orderType: 'subtitle' },
+    { orderId: 'o-dub-de', orderType: 'aiDubbing' },
+  ];
+
+  it('createAll returns every created order from a single request', async () => {
+    const { ollang, calls } = makeClient(created);
+
+    const orders = await ollang.orders.createAll(params);
+
+    expect(orders).toEqual(created);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      method: 'POST',
+      path: '/integration/orders/create',
+      data: params,
+    });
+  });
+
+  it('create still returns one order of the requested type', async () => {
+    const { ollang, calls } = makeClient(created);
+
+    const order = await ollang.orders.create(params);
+
+    expect(calls).toHaveLength(1);
+    expect(order).toMatchObject({
+      id: 'o-dub-fr',
+      orderType: 'aiDubbing',
+      level: 0,
+      projectId: 'p1',
+      targetLanguageConfigs: params.targetLanguageConfigs,
+    });
+  });
+
+  it('create returns the first order for other order types', async () => {
+    const { ollang } = makeClient([
+      { orderId: 'o1', orderType: 'document' },
+      { orderId: 'o2', orderType: 'document' },
+    ]);
+
+    const order = await ollang.orders.create({ ...params, orderType: 'document' });
+
+    expect(order.id).toBe('o1');
+  });
+
+  it.each(['create', 'createAll'] as const)(
+    '%s throws when no order is returned',
+    async (method) => {
+      const { ollang } = makeClient([]);
+
+      await expect(ollang.orders[method](params)).rejects.toThrow('No order ID returned from API');
+    }
+  );
+});
+
 describe('order extras', () => {
   it('hits the review and embedding endpoints', async () => {
     const { ollang, calls } = makeClient();
